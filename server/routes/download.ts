@@ -45,11 +45,21 @@ router.post('/', async (req, res) => {
         '--output', outputPath,
       ], {
         onStdout: (chunk) => {
-          // Parse yt-dlp progress: "[download]  45.2% of 123.45MiB"
+          // HLS fragment progress: "[download]  0.8% of ... (frag 12/245)"
+          const fragMatch = chunk.match(/\(frag (\d+)\/(\d+)\)/)
+          if (fragMatch) {
+            const n = parseInt(fragMatch[1]), total = parseInt(fragMatch[2])
+            if (total > 0) {
+              const percent = Math.min(99, Math.round((n / total) * 100))
+              jobManager.sendProgress(jobId, { type: 'progress', stage: 'downloading', percent })
+              return
+            }
+          }
+          // Regular download: "[download]  45.2% of 123.45MiB"
           const match = chunk.match(/\[download\]\s+([\d.]+)%/)
           if (match) {
-            const percent = Math.round(parseFloat(match[1]))
-            jobManager.sendProgress(jobId, { type: 'progress', stage: 'downloading', percent })
+            const percent = Math.min(99, Math.round(parseFloat(match[1])))
+            if (percent > 0) jobManager.sendProgress(jobId, { type: 'progress', stage: 'downloading', percent })
           }
         },
       })
