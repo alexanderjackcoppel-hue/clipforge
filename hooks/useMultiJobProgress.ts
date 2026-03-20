@@ -17,7 +17,10 @@ export function useMultiJobProgress(
     pollInterval: ReturnType<typeof setInterval> | null
   }>>(new Map())
 
-  // Reconcile EventSources on every render (idempotent: skips already-open jobIds)
+  // Stable key: only re-run when jobMap content changes, not on every render
+  const depKey = Object.keys(jobMap).sort().map(k => `${k}:${jobMap[k] ?? ''}`).join('|')
+
+  // Reconcile EventSources when jobMap changes (idempotent: skips already-open jobIds)
   useEffect(() => {
     const desiredJobIds = new Set<string>()
     const jobIdToClipId: Record<string, string> = {}
@@ -103,7 +106,7 @@ export function useMultiJobProgress(
       }
       sourcesRef.current.delete(jobId)
     }
-  })
+  }, [depKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close all on unmount
   useEffect(() => {
