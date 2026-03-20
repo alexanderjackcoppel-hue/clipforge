@@ -105,6 +105,16 @@ router.post('/', (req, res) => {
       return
     }
 
+    const HEX6 = /^[0-9A-Fa-f]{6}$/
+    if (!HEX6.test(socialBgColor)) {
+      res.status(400).json({ error: 'Invalid socialBgColor. Use a 6-digit hex value (e.g. FFFFFF).' })
+      return
+    }
+    if (!HEX6.test(cinematicBgColor)) {
+      res.status(400).json({ error: 'Invalid cinematicBgColor. Use a 6-digit hex value (e.g. 000000).' })
+      return
+    }
+
     const files = (req.files as { [fieldname: string]: Express.Multer.File[] }) || {}
     const voiceoverFile = voiceoverEnabled === 'true' ? files['voiceover']?.[0]?.path : undefined
     const overlayFile = overlayEnabled === 'true' ? files['overlay']?.[0]?.path : undefined
