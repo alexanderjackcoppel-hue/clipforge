@@ -24,7 +24,7 @@ function checkBinary(name: string, required: boolean): boolean {
       console.error(`${msg}\n  Install: brew install ${name}`)
       return false
     } else {
-      console.warn(`${msg} (optional — subtitles won't work)\n  Install: brew install whisper-cpp && whisper-cpp --download-model base`)
+      console.warn(`${msg} (optional — subtitles won't work)\n  Install: brew install whisper-cpp\n  Model:   curl -L https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin -o /opt/homebrew/share/whisper-cpp/models/ggml-base.bin`)
       return true
     }
   }
@@ -32,7 +32,7 @@ function checkBinary(name: string, required: boolean): boolean {
 
 const ffmpegOk = checkBinary('ffmpeg', true)
 const ytdlpOk = checkBinary('yt-dlp', true)
-checkBinary('whisper-cpp', false) // optional
+checkBinary('whisper-cli', false) // optional — Homebrew installs as whisper-cli
 
 if (!ffmpegOk || !ytdlpOk) {
   console.error('\nMissing required binaries. Exiting.')
@@ -41,6 +41,27 @@ if (!ffmpegOk || !ytdlpOk) {
 
 const app = express()
 app.use(express.json())
+// Allow the Next.js dev server (localhost:3000) to load media directly from this server
+app.use((_req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD')
+  next()
+})
+
+// --- Job status REST endpoint (polling fallback) ---
+app.get('/jobs/:id', (req, res) => {
+  const { id } = req.params
+  if (!isValidJobId(id)) {
+    res.status(400).json({ error: 'Invalid job ID' })
+    return
+  }
+  const job = jobManager.getJob(id)
+  if (!job) {
+    res.status(404).json({ error: 'Job not found' })
+    return
+  }
+  res.json({ status: job.status, percent: job.percent, events: job.events })
+})
 
 // --- SSE progress endpoint ---
 app.get('/jobs/:id/progress', (req, res) => {

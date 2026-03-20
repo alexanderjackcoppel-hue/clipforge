@@ -41,6 +41,8 @@ router.post('/', async (req, res) => {
         '-f', 'bestvideo[ext=mp4][vcodec^=avc]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         '--merge-output-format', 'mp4',
         '--no-playlist',
+        '--progress',          // force progress even when stdout is piped
+        '--newline',           // one progress line per stdout line (no overwrite)
         '--js-runtimes', `bun:${process.execPath}`,
         '--output', outputPath,
       ], {
@@ -82,7 +84,7 @@ function classifyYtdlpError(stderr: string): string {
   if (stderr.includes('DRM') || stderr.includes('drm')) return 'This video is DRM-protected and cannot be downloaded.'
   if (stderr.includes('Private video') || stderr.includes('private')) return 'This video is private or unavailable.'
   if (stderr.includes('geo') || stderr.includes('not available in your country')) return 'This video is geo-blocked in your region.'
-  if (stderr.includes('timed out')) return 'Download timed out after 10 minutes.'
+  if (stderr.includes('timed out')) return 'Download timed out after 30 minutes.'
   if (stderr.includes('not found')) return 'yt-dlp not installed. Run: brew install yt-dlp'
   return `Download failed: ${stderr.slice(0, 200)}`
 }

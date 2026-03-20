@@ -1,36 +1,123 @@
 export interface ExportOptions {
   inputVideo: string      // trimmed.mp4 path
   outputVideo: string     // final.mp4 path
-  subtitlesFile?: string  // .ass file path (already styled)
+  subtitlesFile?: string  // .ass file path — auto-generated layer
+  customTextFile?: string // .ass file path — custom text layer
   voiceoverFile?: string  // audio file path
-  originalVolume: number  // 0-1 (from slider: 1 = 100% original)
-  voiceoverVolume: number // 0-1 (from slider: 1 = 100% voiceover)
+  originalVolume: number  // 0-1
+  voiceoverVolume: number // 0-1
+  bgMusicFile?: string    // background music audio path (loops if shorter than clip)
+  bgMusicVolume?: number  // 0-1
+  bgMusicFadeIn?: boolean
+  bgMusicFadeOut?: boolean
   overlayImage?: string   // image file path
   overlayPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
   overlayScale: number    // 1-100 (percent of frame width)
+  videoFormat?: 'standard' | 'social-post' | 'cinematic' | 'blur-bg'
+  socialBgColor?: string  // 6-char hex like 'FFFFFF'
+  socialVideoScale?: number // 40-95 (% of frame height the video occupies)
+  videoOffsetX?: number   // -45 to 45 (% of frame width)
+  videoOffsetY?: number   // -45 to 45 (% of frame height)
+  cinematicBgColor?: string // 6-char hex for cinematic bar color
+  videoBarHeight?: number   // 5-45 (% of frame height for each bar in cinematic/blur-bg)
+  // Per-clip effects
+  fadeIn?: boolean        // 1-second video+audio fade in at start
+  fadeOut?: boolean       // 1-second video+audio fade out at end
+  clipDuration?: number   // seconds — required for fade out timing
+  zoomEnabled?: boolean   // slow zoom-in toward zoomX,zoomY over clip duration
+  zoomX?: number          // 0-100 percent of frame width (zoom target)
+  zoomY?: number          // 0-100 percent of frame height (zoom target)
 }
 
 export function buildExportArgs(opts: ExportOptions): string[] {
   const inputs: string[] = ['-i', opts.inputVideo]
   let overlayIdx: number | null = null
   let voiceoverIdx: number | null = null
+  let bgMusicIdx: number | null = null
+  let nextInputIdx = 1  // track actual ffmpeg input index (0 = main video)
 
   if (opts.overlayImage) {
-    overlayIdx = 1
+    overlayIdx = nextInputIdx++
     inputs.push('-i', opts.overlayImage)
   }
   if (opts.voiceoverFile) {
-    voiceoverIdx = overlayIdx !== null ? 2 : 1
+    voiceoverIdx = nextInputIdx++
     inputs.push('-i', opts.voiceoverFile)
+  }
+  if (opts.bgMusicFile) {
+    bgMusicIdx = nextInputIdx++
+    // -stream_loop -1 must come before -i for looping to apply
+    inputs.push('-stream_loop', '-1', '-i', opts.bgMusicFile)
   }
 
   const filterParts: string[] = []
   let lastVideoLabel = '[sv]'
 
-  // Base scale/crop to 1080x1920
-  filterParts.push(
-    `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[sv]`
-  )
+  // Base scale/crop to 1080x1920, with optional format transform
+  const fmt   = opts.videoFormat ?? 'standard'
+  const scale = Math.max(20, Math.min(150, opts.socialVideoScale ?? 70)) / 100
+  const bgHex = (opts.socialBgColor ?? 'FFFFFF').replace('#', '')
+  const offXpx = Math.round(((opts.videoOffsetX ?? 0) / 100) * 1080)
+  const offYpx = Math.round(((opts.videoOffsetY ?? 0) / 100) * 1920)
+  const overlayExpr = `(W-w)/2+${offXpx}:(H-h)/2+${offYpx}`
+
+  if (fmt === 'social-post') {
+    // Scale down, pad with solid background, then overlay at offset position
+    filterParts.push(
+      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,` +
+      `scale=round(iw*${scale}/2)*2:round(ih*${scale}/2)*2[vsmall];` +
+      `color=c=0x${bgHex}:size=1080x1920:r=30000/1001,format=yuv420p[bg];` +
+      `[bg][vsmall]overlay=${overlayExpr}[sv]`
+    )
+  } else if (fmt === 'cinematic') {
+    // Cover full frame, overlay solid colored bars top/bottom (same structure as blur-bg)
+    const rawBarH = Math.max(5, Math.min(45, opts.videoBarHeight ?? 34))
+    const barPx   = Math.round((rawBarH / 100) * 1920)
+    const cinBg = `0x${(opts.cinematicBgColor ?? '000000').replace('#', '')}`
+    filterParts.push(
+      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,` +
+      `drawbox=x=0:y=0:w=1080:h=${barPx}:color=${cinBg}@1.0:t=fill,` +
+      `drawbox=x=0:y=${1920 - barPx}:w=1080:h=${barPx}:color=${cinBg}@1.0:t=fill[sv]`
+    )
+  } else if (fmt === 'blur-bg') {
+    // Split: blurred background fills frame, crisp center video sits over it
+    const rawBarH = Math.max(5, Math.min(45, opts.videoBarHeight ?? 34))
+    const barPx   = Math.round((rawBarH / 100) * 1920)
+    const vidH    = 1920 - 2 * barPx
+    const vidHEven = vidH % 2 === 0 ? vidH : vidH - 1
+    const barPxFinal = (1920 - vidHEven) / 2
+    filterParts.push(
+      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,split[raw1][raw2];` +
+      `[raw1]boxblur=luma_radius=20:luma_power=2,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[bg];` +
+      `[raw2]scale=1080:${vidHEven}:force_original_aspect_ratio=decrease,` +
+      `pad=1080:${vidHEven}:(1080-iw)/2:0[fg];` +
+      `[bg][fg]overlay=(W-w)/2:${barPxFinal}[sv]`
+    )
+  } else {
+    // standard: full bleed
+    filterParts.push(
+      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[sv]`
+    )
+  }
+
+  // Zoom effect (slow zoom toward target point over clip duration)
+  if (opts.zoomEnabled) {
+    const zx = Math.max(0.05, Math.min(0.95, (opts.zoomX ?? 50) / 100))
+    const zy = Math.max(0.05, Math.min(0.95, (opts.zoomY ?? 50) / 100))
+    const dur = Math.max(1, opts.clipDuration ?? 10)
+    const fps = 30
+    const frames = Math.round(dur * fps)
+    const zoomRate = (0.5 / dur).toFixed(6)
+    // x/y expressions keep the zoom target centered, clamped to valid range
+    filterParts.push(
+      `${lastVideoLabel}zoompan=` +
+      `z='min(1.5,1+t*${zoomRate})':` +
+      `x='max(0,min(iw-iw/zoom,iw*${zx.toFixed(4)}-iw/zoom/2))':` +
+      `y='max(0,min(ih-ih/zoom,ih*${zy.toFixed(4)}-ih/zoom/2))':` +
+      `d=${frames}:fps=${fps}:s=1080x1920[svz]`
+    )
+    lastVideoLabel = '[svz]'
+  }
 
   // Overlay image
   if (overlayIdx !== null) {
@@ -42,28 +129,82 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     lastVideoLabel = '[ov]'
   }
 
-  // Subtitles
+  // Subtitle layers — burned sequentially
+  const escASSPath = (p: string) => p.replace(/\\/g, '\\\\').replace(/:/g, '\\:')
+
   if (opts.subtitlesFile) {
-    const escapedPath = opts.subtitlesFile
-      .replace(/\\/g, '\\\\')
-      .replace(/:/g, '\\:')
-      .replace(/'/g, "\\'")
-    filterParts.push(`${lastVideoLabel}ass='${escapedPath}'[vout]`)
+    const nextLabel = opts.customTextFile ? '[v_auto]' : '[vout]'
+    filterParts.push(`${lastVideoLabel}ass=${escASSPath(opts.subtitlesFile)}${nextLabel}`)
+    lastVideoLabel = nextLabel
+  }
+
+  if (opts.customTextFile) {
+    filterParts.push(`${lastVideoLabel}ass=${escASSPath(opts.customTextFile)}[vout]`)
     lastVideoLabel = '[vout]'
-  } else {
-    // Pass through to [vout] with a no-op null filter
+  }
+
+  if (!opts.subtitlesFile && !opts.customTextFile) {
     filterParts.push(`${lastVideoLabel}null[vout]`)
     lastVideoLabel = '[vout]'
   }
 
-  // Audio filters
+  // Video fade (applied after subtitle burn, before final map)
+  let videoOutLabel = '[vout]'
+  if (opts.fadeIn || opts.fadeOut) {
+    const dur = Math.max(1, opts.clipDuration ?? 10)
+    const fadeParts: string[] = []
+    if (opts.fadeIn)  fadeParts.push(`fade=t=in:st=0:d=1`)
+    if (opts.fadeOut) fadeParts.push(`fade=t=out:st=${Math.max(0, dur - 1).toFixed(3)}:d=1`)
+    filterParts.push(`[vout]${fadeParts.join(',')}[vfinal]`)
+    videoOutLabel = '[vfinal]'
+  }
+
+  // Audio filters — build per-stream chains, then amix all active streams
   const audioFilters: string[] = []
-  if (voiceoverIdx !== null) {
-    const origVol = Math.max(0, Math.min(1, opts.originalVolume)).toFixed(2)
-    const voiceVol = Math.max(0, Math.min(1, opts.voiceoverVolume)).toFixed(2)
+  const audioStreamLabels: string[] = []
+
+  // Original audio (always present unless muted via originalVolume=0)
+  const origVol = Math.max(0, Math.min(1, opts.originalVolume)).toFixed(2)
+  if (opts.fadeIn || opts.fadeOut) {
+    const dur = Math.max(1, opts.clipDuration ?? 10)
+    const aParts: string[] = [`volume=${origVol}`]
+    if (opts.fadeIn)  aParts.push(`afade=t=in:st=0:d=1`)
+    if (opts.fadeOut) aParts.push(`afade=t=out:st=${Math.max(0, dur - 1).toFixed(3)}:d=1`)
+    audioFilters.push(`[0:a]${aParts.join(',')}[a0]`)
+  } else {
     audioFilters.push(`[0:a]volume=${origVol}[a0]`)
+  }
+  audioStreamLabels.push('[a0]')
+
+  // Voiceover
+  if (voiceoverIdx !== null) {
+    const voiceVol = Math.max(0, Math.min(1, opts.voiceoverVolume)).toFixed(2)
     audioFilters.push(`[${voiceoverIdx}:a]volume=${voiceVol}[a1]`)
-    audioFilters.push(`[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]`)
+    audioStreamLabels.push('[a1]')
+  }
+
+  // Background music
+  if (bgMusicIdx !== null) {
+    const musicVol = Math.max(0, Math.min(1, opts.bgMusicVolume ?? 0.7)).toFixed(2)
+    const dur = Math.max(1, opts.clipDuration ?? 10)
+    const mParts: string[] = [`volume=${musicVol}`]
+    if (opts.bgMusicFadeIn)  mParts.push(`afade=t=in:st=0:d=1`)
+    if (opts.bgMusicFadeOut) mParts.push(`afade=t=out:st=${Math.max(0, dur - 1).toFixed(3)}:d=1`)
+    audioFilters.push(`[${bgMusicIdx}:a]${mParts.join(',')}[am]`)
+    audioStreamLabels.push('[am]')
+  }
+
+  // Mix all streams; if only one stream, rename it [aout] directly
+  let audioOutLabel = ''
+  if (audioStreamLabels.length > 1) {
+    audioFilters.push(
+      `${audioStreamLabels.join('')}amix=inputs=${audioStreamLabels.length}:duration=first:dropout_transition=0[aout]`
+    )
+    audioOutLabel = '[aout]'
+  } else {
+    // Single stream — just alias it
+    audioFilters.push(`[a0]anull[aout]`)
+    audioOutLabel = '[aout]'
   }
 
   const allFilters = [...filterParts, ...audioFilters]
@@ -72,14 +213,10 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   const args: string[] = [
     ...inputs,
     '-filter_complex', filterComplex,
-    '-map', '[vout]',
+    '-map', videoOutLabel,
   ]
 
-  if (voiceoverIdx !== null) {
-    args.push('-map', '[aout]')
-  } else {
-    args.push('-map', '0:a?')
-  }
+  args.push('-map', audioOutLabel)
 
   args.push(
     '-c:v', 'libx264',
@@ -110,12 +247,27 @@ export function buildTrimArgs(opts: {
   outputVideo: string
   startSeconds: number
   durationSeconds: number
+  crop?: { x: number; y: number; w: number; h: number }  // percentages 0-100
 }): string[] {
+  const vfParts: string[] = []
+
+  // Spatial crop: applied before scale so user selects which region of the source frame to use
+  if (opts.crop) {
+    const { x, y, w, h } = opts.crop
+    const cx = Math.max(0, Math.min(100, x)) / 100
+    const cy = Math.max(0, Math.min(100, y)) / 100
+    const cw = Math.max(1, Math.min(100, w)) / 100
+    const ch = Math.max(1, Math.min(100, h)) / 100
+    vfParts.push(`crop=iw*${cw.toFixed(4)}:ih*${ch.toFixed(4)}:iw*${cx.toFixed(4)}:ih*${cy.toFixed(4)}`)
+  }
+
+  vfParts.push('scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920')
+
   return [
     '-i', opts.inputVideo,
     '-ss', String(opts.startSeconds),
     '-t', String(opts.durationSeconds),
-    '-vf', 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920',
+    '-vf', vfParts.join(','),
     '-c:v', 'libx264',
     '-preset', 'fast',
     '-crf', '23',
@@ -146,12 +298,21 @@ export interface SubtitleLine {
 export interface SubtitleStyle {
   fontSize: number      // 16-72
   color: string         // hex like 'FFFFFF' (no #, ASS format)
-  position: 'top' | 'middle' | 'bottom'
+  position: { x: number; y: number }  // 0-100% of 1080x1920 frame
+  fontFamily: string    // e.g. 'Arial', 'Impact'
+  bold: boolean
+  outlineWidth: number  // 0-8 pixels
 }
 
 export function buildASSSubtitles(lines: SubtitleLine[], style: SubtitleStyle): string {
-  const alignment = style.position === 'top' ? 8 : style.position === 'middle' ? 5 : 2
-  const marginV = style.position === 'top' ? 50 : style.position === 'bottom' ? 50 : 0
+  // Convert percentage position to pixel coordinates on 1080x1920 canvas
+  const xPx = Math.round((style.position.x / 100) * 1080)
+  const yPx = Math.round((style.position.y / 100) * 1920)
+  // \an5 = center anchor; \pos(x,y) = absolute pixel position
+  const posTag = `{\\an5\\pos(${xPx},${yPx})}`
+
+  const boldFlag = style.bold ? 1 : 0
+  const outline = Math.max(0, Math.min(8, style.outlineWidth))
 
   const header = `[Script Info]
 ScriptType: v4.00+
@@ -160,7 +321,7 @@ PlayResY: 1920
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,${style.fontSize},&H00${style.color},&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,3,1,${alignment},40,40,${marginV},1
+Style: Default,${style.fontFamily},${style.fontSize},&H00${style.color},&H000000FF,&H00000000,&H80000000,${boldFlag},0,0,0,100,100,0,0,1,${outline},1,5,40,40,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
@@ -169,7 +330,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
     const start = formatASSTime(line.start)
     const end = formatASSTime(line.end)
     const text = line.text.replace(/\n/g, '\\N')
-    return `Dialogue: 0,${start},${end},Default,,0,0,0,,${text}`
+    return `Dialogue: 0,${start},${end},Default,,0,0,0,,${posTag}${text}`
   }).join('\n')
 
   return header + '\n' + events + '\n'

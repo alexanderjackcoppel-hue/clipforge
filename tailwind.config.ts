@@ -7,6 +7,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-ui)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'SF Mono', 'Fira Code', 'monospace'],
+      },
       colors: {
         violet: {
           400: '#a78bfa',

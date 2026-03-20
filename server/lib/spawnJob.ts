@@ -1,6 +1,6 @@
 import { spawn } from 'child_process'
 
-const TIMEOUT_MS = 10 * 60 * 1000
+const TIMEOUT_MS = 30 * 60 * 1000
 
 export async function spawnJob(
   cmd: string,
@@ -51,7 +51,7 @@ export async function spawnJob(
     child.on('close', (code) => {
       clearTimeout(timer)
       if (timedOut) {
-        reject(new Error(`'${cmd}' timed out after 10 minutes`))
+        reject(new Error(`'${cmd}' timed out after 30 minutes`))
       } else if (code !== 0) {
         reject(new Error(`'${cmd}' exited with code ${code}.\n${stderr.slice(-800)}`))
       } else {

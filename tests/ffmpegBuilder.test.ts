@@ -102,10 +102,10 @@ describe('buildExportArgs', () => {
     const args = buildExportArgs(base)
     expect(args).toContain('-filter_complex')
     expect(args).toContain('[vout]')
-    // Should map video and pass through audio
+    // Should map video and audio via filter_complex
     const mapIdx = args.indexOf('-map')
     expect(args[mapIdx + 1]).toBe('[vout]')
-    expect(args).toContain('0:a?')
+    expect(args).toContain('[aout]')
     expect(args[args.length - 1]).toBe('/tmp/final.mp4')
   })
 
@@ -162,37 +162,56 @@ describe('buildASSSubtitles', () => {
     { start: 0, end: 2, text: 'Hello world' },
     { start: 2.5, end: 5, text: 'Second line' },
   ]
+  const baseStyle = { fontSize: 48, color: 'FFFFFF', position: { x: 50, y: 85 }, fontFamily: 'Arial', bold: true, outlineWidth: 3 }
 
   it('produces valid ASS file header', () => {
-    const ass = buildASSSubtitles(lines, { fontSize: 48, color: 'FFFFFF', position: 'bottom' })
+    const ass = buildASSSubtitles(lines, baseStyle)
     expect(ass).toContain('[Script Info]')
     expect(ass).toContain('[V4+ Styles]')
     expect(ass).toContain('[Events]')
   })
 
   it('includes the hex color in the style', () => {
-    const ass = buildASSSubtitles(lines, { fontSize: 36, color: 'FFFF00', position: 'bottom' })
+    const ass = buildASSSubtitles(lines, { ...baseStyle, color: 'FFFF00' })
     expect(ass).toContain('FFFF00')
   })
 
-  it('bottom position uses alignment 2', () => {
-    const ass = buildASSSubtitles(lines, { fontSize: 48, color: 'FFFFFF', position: 'bottom' })
-    // Alignment 2 = bottom-center in ASS
-    expect(ass).toMatch(/,2,/)
+  it('uses \\an5 with absolute \\pos() for positioning', () => {
+    const ass = buildASSSubtitles(lines, { ...baseStyle, position: { x: 50, y: 85 } })
+    // \an5 = center anchor, \pos(540,1632) for 50%/85% of 1080x1920
+    expect(ass).toContain('\\an5')
+    expect(ass).toContain('\\pos(540,1632)')
   })
 
-  it('top position uses alignment 8', () => {
-    const ass = buildASSSubtitles(lines, { fontSize: 48, color: 'FFFFFF', position: 'top' })
-    expect(ass).toMatch(/,8,/)
+  it('encodes position correctly for top-left (10%, 10%)', () => {
+    const ass = buildASSSubtitles(lines, { ...baseStyle, position: { x: 10, y: 10 } })
+    expect(ass).toContain('\\pos(108,192)')
   })
 
-  it('middle position uses alignment 5', () => {
-    const ass = buildASSSubtitles(lines, { fontSize: 48, color: 'FFFFFF', position: 'middle' })
-    expect(ass).toMatch(/,5,/)
+  it('uses bold flag in style line', () => {
+    const ass = buildASSSubtitles(lines, { ...baseStyle, bold: true })
+    // ASS Style: ...,Bold=1,...
+    expect(ass).toMatch(/Style: Default,Arial,48,.+,1,0,0,0/)
+  })
+
+  it('uses not-bold flag in style line', () => {
+    const ass = buildASSSubtitles(lines, { ...baseStyle, bold: false })
+    expect(ass).toMatch(/Style: Default,Arial,48,.+,0,0,0,0/)
+  })
+
+  it('uses custom font family in style line', () => {
+    const ass = buildASSSubtitles(lines, { ...baseStyle, fontFamily: 'Impact' })
+    expect(ass).toContain('Style: Default,Impact,')
+  })
+
+  it('clamps outlineWidth to 0-8', () => {
+    const ass = buildASSSubtitles(lines, { ...baseStyle, outlineWidth: 10 })
+    // Should be clamped to 8 in the Style line
+    expect(ass).toContain(',8,')
   })
 
   it('includes Dialogue lines for each subtitle', () => {
-    const ass = buildASSSubtitles(lines, { fontSize: 48, color: 'FFFFFF', position: 'bottom' })
+    const ass = buildASSSubtitles(lines, baseStyle)
     expect(ass).toContain('Hello world')
     expect(ass).toContain('Second line')
     expect((ass.match(/^Dialogue:/gm) ?? []).length).toBe(2)

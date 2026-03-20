@@ -9,7 +9,7 @@ import { TMP_DIR } from '../index.js'
 const router = Router()
 
 router.post('/', async (req, res) => {
-  const { jobId: importJobId, startTime, endTime, clipSuffix } = req.body
+  const { jobId: importJobId, startTime, endTime, clipSuffix, cropX, cropY, cropW, cropH } = req.body
 
   if (!isValidJobId(importJobId)) {
     res.status(400).json({ error: 'Invalid job ID' })
@@ -38,9 +38,6 @@ router.post('/', async (req, res) => {
   }
 
   const duration = endSeconds - startSeconds
-  if (duration > 60) {
-    console.warn(`Trim duration ${duration}s exceeds YouTube Shorts 60s limit`)
-  }
 
   const sfx = clipSuffix ? `_${clipSuffix}` : ''
   const jobDir = join(TMP_DIR, importJobId)
@@ -59,11 +56,21 @@ router.post('/', async (req, res) => {
     try {
       jobManager.sendProgress(opJobId, { type: 'progress', stage: 'trimming', percent: 0 })
 
+      const crop = (cropX !== undefined && cropY !== undefined && cropW !== undefined && cropH !== undefined)
+        ? {
+            x: parseFloat(cropX) || 0,
+            y: parseFloat(cropY) || 0,
+            w: parseFloat(cropW) || 100,
+            h: parseFloat(cropH) || 100,
+          }
+        : undefined
+
       const args = buildTrimArgs({
         inputVideo: inputPath,
         outputVideo: outputPath,
         startSeconds,
         durationSeconds: duration,
+        crop,
       })
 
       let totalDuration: number | null = null

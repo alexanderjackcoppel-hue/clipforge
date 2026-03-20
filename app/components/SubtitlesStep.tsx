@@ -1,228 +1,320 @@
 'use client'
+import { useState } from 'react'
 import type { Clip } from '../page'
 
-interface SubtitleLine {
-  id: number
-  start: number
-  end: number
-  text: string
-}
+interface SubtitleLine { id: number; start: number; end: number; text: string }
+interface Pos { x: number; y: number }
+interface StyleProps { fontSize: number; color: string; position: Pos; fontFamily: string; bold: boolean; outlineWidth: number }
 
 interface SubtitlesStepProps {
-  clips: Clip[]               // only trimmed clips
+  clips: Clip[]
   activeClipId: string | null
   onActiveClipChange: (id: string) => void
-  onToggle: (v: boolean) => void
+  activeTab: 'auto' | 'custom'
+  onTabChange: (t: 'auto' | 'custom') => void
+
+  onToggleAuto: (v: boolean) => void
   onGenerate: () => void
-  onLinesChange: (lines: SubtitleLine[]) => void
-  fontSize: number
-  onFontSizeChange: (v: number) => void
-  color: string
-  onColorChange: (v: string) => void
-  position: 'top' | 'middle' | 'bottom'
-  onPositionChange: (v: 'top' | 'middle' | 'bottom') => void
+  onAutoLinesChange: (lines: SubtitleLine[]) => void
+  autoFontSize: number; onAutoFontSizeChange: (v: number) => void
+  autoColor: string; onAutoColorChange: (v: string) => void
+  autoFontFamily: string; onAutoFontFamilyChange: (v: string) => void
+  autoBold: boolean; onAutoBoldChange: (v: boolean) => void
+  autoOutlineWidth: number; onAutoOutlineWidthChange: (v: number) => void
+  autoPosition: Pos
+
+  onToggleCustom: (v: boolean) => void
+  onCustomLinesChange: (lines: SubtitleLine[]) => void
+  customFontSize: number; onCustomFontSizeChange: (v: number) => void
+  customColor: string; onCustomColorChange: (v: string) => void
+  customFontFamily: string; onCustomFontFamilyChange: (v: string) => void
+  customBold: boolean; onCustomBoldChange: (v: boolean) => void
+  customOutlineWidth: number; onCustomOutlineWidthChange: (v: number) => void
+  customPosition: Pos
+
   disabled: boolean
 }
 
 const PRESET_COLORS = [
-  { label: 'White', value: 'FFFFFF' },
+  { label: 'White',  value: 'FFFFFF' },
   { label: 'Yellow', value: 'FFFF00' },
-  { label: 'Black', value: '000000' },
+  { label: 'Black',  value: '000000' },
+  { label: 'Red',    value: 'FF3B30' },
+  { label: 'Cyan',   value: '00E5FF' },
+]
+const FONT_FAMILIES = [
+  { label: 'Arial',     value: 'Arial' },
+  { label: 'Impact',    value: 'Impact' },
+  { label: 'Helvetica', value: 'Helvetica' },
+  { label: 'Georgia',   value: 'Georgia' },
+  { label: 'Trebuchet', value: 'Trebuchet MS' },
 ]
 
-export default function SubtitlesStep({
-  clips,
-  activeClipId,
-  onActiveClipChange,
-  onToggle,
-  onGenerate,
-  onLinesChange,
-  fontSize,
-  onFontSizeChange,
-  color,
-  onColorChange,
-  position,
-  onPositionChange,
-  disabled,
-}: SubtitlesStepProps) {
-  const activeClip = clips.find(c => c.id === activeClipId) ?? clips[0] ?? null
-  const enabled = activeClip?.subtitlesEnabled ?? false
-  const status = activeClip?.subtitleStatus ?? 'idle'
-  const error = activeClip?.subtitleError ?? null
-  const lines = activeClip?.subtitleLines ?? []
+function StyleControls({ style, onChange }: { style: StyleProps; onChange: (p: Partial<StyleProps>) => void }) {
+  const hexToInput = (h: string) => `#${h}`
+  const inputToHex = (v: string) => v.replace('#', '').toUpperCase()
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <label className="text-xs text-zinc-400">Font</label>
+        <div className="flex flex-wrap gap-1.5">
+          {FONT_FAMILIES.map(f => (
+            <button key={f.value} type="button" onClick={() => onChange({ fontFamily: f.value })}
+              className={`px-2.5 py-1 rounded-lg text-xs border transition-all ${style.fontFamily === f.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'}`}
+              style={{ fontFamily: f.value }}>{f.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-1">
+        <div className="flex justify-between text-xs text-zinc-400">
+          <label>Size</label><span className="font-mono">{style.fontSize}px</span>
+        </div>
+        <input type="range" min={16} max={96} value={style.fontSize}
+          onChange={e => onChange({ fontSize: Number(e.target.value) })} className="w-full" />
+      </div>
+      <div className="flex gap-3 items-end">
+        <div className="space-y-1">
+          <label className="text-xs text-zinc-400">Bold</label>
+          <button type="button" onClick={() => onChange({ bold: !style.bold })}
+            className={`w-9 h-7 rounded-lg text-xs border font-bold transition-all ${style.bold ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>B</button>
+        </div>
+        <div className="flex-1 space-y-1">
+          <div className="flex justify-between text-xs text-zinc-400">
+            <label>Outline</label><span className="font-mono">{style.outlineWidth}px</span>
+          </div>
+          <input type="range" min={0} max={8} value={style.outlineWidth}
+            onChange={e => onChange({ outlineWidth: Number(e.target.value) })} className="w-full" />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs text-zinc-400">Color</label>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {PRESET_COLORS.map(p => (
+            <button key={p.value} type="button" onClick={() => onChange({ color: p.value })} title={p.label}
+              className={`w-6 h-6 rounded-full border-2 flex-shrink-0 transition-all ${style.color === p.value ? 'border-violet-500 scale-110' : 'border-zinc-600 hover:border-zinc-400'}`}
+              style={{ backgroundColor: `#${p.value}` }} />
+          ))}
+          <label className="flex items-center gap-1 text-xs text-zinc-500 cursor-pointer">
+            Custom
+            <input type="color" value={hexToInput(style.color)} onChange={e => onChange({ color: inputToHex(e.target.value) })}
+              className="w-6 h-6 rounded cursor-pointer bg-transparent border-0 p-0" />
+          </label>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-  const hexToInput = (hex: string) => `#${hex}`
-  const inputToHex = (val: string) => val.replace('#', '').toUpperCase()
+export default function SubtitlesStep(props: SubtitlesStepProps) {
+  const {
+    clips, activeClipId, onActiveClipChange, activeTab, onTabChange,
+    onToggleAuto, onGenerate, onAutoLinesChange,
+    autoFontSize, onAutoFontSizeChange, autoColor, onAutoColorChange,
+    autoFontFamily, onAutoFontFamilyChange, autoBold, onAutoBoldChange,
+    autoOutlineWidth, onAutoOutlineWidthChange, autoPosition,
+    onToggleCustom, onCustomLinesChange,
+    customFontSize, onCustomFontSizeChange, customColor, onCustomColorChange,
+    customFontFamily, onCustomFontFamilyChange, customBold, onCustomBoldChange,
+    customOutlineWidth, onCustomOutlineWidthChange, customPosition,
+    disabled,
+  } = props
 
-  const handleTextChange = (id: number, text: string) => {
-    onLinesChange(lines.map(l => l.id === id ? { ...l, text } : l))
+  const activeClip    = clips.find(c => c.id === activeClipId) ?? clips[0] ?? null
+  const autoEnabled   = activeClip?.subtitlesEnabled ?? false
+  const autoStatus    = activeClip?.subtitleStatus ?? 'idle'
+  const autoError     = activeClip?.subtitleError ?? null
+  const autoLines     = activeClip?.subtitleLines ?? []
+  const customEnabled = activeClip?.customTextEnabled ?? false
+  const customLines   = activeClip?.customTextLines ?? []
+  const clipDuration  = activeClip ? (activeClip.endSecs - activeClip.startSecs) : 0
+
+  const [manualText, setManualText] = useState('')
+
+  const handleSetCustomLines = () => {
+    const rawLines = manualText.split('\n').map(l => l.trim()).filter(Boolean)
+    if (rawLines.length === 0) return
+    const duration = clipDuration > 0 ? clipDuration : rawLines.length * 3
+    const perLine = duration / rawLines.length
+    onCustomLinesChange(rawLines.map((text, i) => ({
+      id: i + 1,
+      start: parseFloat((i * perLine).toFixed(2)),
+      end:   parseFloat(((i + 1) * perLine).toFixed(2)),
+      text,
+    })))
+    onToggleCustom(true)
+    setManualText('')
   }
 
-  if (clips.length === 0) {
-    return <p className="text-sm text-zinc-500">Trim at least one clip to generate subtitles.</p>
-  }
+  if (clips.length === 0) return <p className="text-sm text-zinc-500">Trim at least one clip to add subtitles.</p>
+
+  const autoStyle: StyleProps   = { fontSize: autoFontSize,   color: autoColor,   fontFamily: autoFontFamily,   bold: autoBold,   outlineWidth: autoOutlineWidth,   position: autoPosition }
+  const customStyle: StyleProps = { fontSize: customFontSize, color: customColor, fontFamily: customFontFamily, bold: customBold, outlineWidth: customOutlineWidth, position: customPosition }
 
   return (
-    <div className={`space-y-4 ${disabled ? 'pointer-events-none' : ''}`}>
-      {/* Clip selector — shown when multiple trimmed clips */}
+    <div className={`space-y-4 ${disabled ? 'pointer-events-none opacity-60' : ''}`}>
+      {/* Clip selector */}
       {clips.length > 1 && (
         <div className="flex items-center gap-2">
-          <span className="text-sm text-zinc-400 whitespace-nowrap">Generate subtitles for:</span>
-          <select
-            value={activeClip?.id ?? ''}
-            onChange={e => onActiveClipChange(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-          >
-            {clips.map(c => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
+          <span className="text-xs text-zinc-400">Clip:</span>
+          <select value={activeClip?.id ?? ''} onChange={e => onActiveClipChange(e.target.value)}
+            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500">
+            {clips.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </div>
       )}
 
-      {/* Toggle */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => onToggle(!enabled)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-zinc-900 ${
-            enabled ? 'bg-violet-600' : 'bg-zinc-700'
-          }`}
-          aria-pressed={enabled}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-              enabled ? 'translate-x-6' : 'translate-x-1'
-            }`}
-          />
+      {/* Tab switcher */}
+      <div className="flex gap-1 bg-zinc-900 rounded-xl p-1 border border-zinc-800">
+        <button type="button" onClick={() => onTabChange('auto')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-medium transition-all ${activeTab === 'auto' ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          <svg className="h-3 w-3 text-violet-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l1.68 5.17L19 9l-5.32 1.83L12 16l-1.68-5.17L5 9l5.32-1.83L12 2z" />
+          </svg>
+          Auto-Generate
+          {autoEnabled && autoLines.length > 0 && (
+            <span className="ml-1 text-[9px] bg-violet-600/30 text-violet-400 rounded-full px-1.5">{autoLines.length}</span>
+          )}
         </button>
-        <span className="text-sm text-zinc-300">{enabled ? 'Subtitles on' : 'Subtitles off'}</span>
+        <button type="button" onClick={() => onTabChange('custom')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-medium transition-all ${activeTab === 'custom' ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          <svg className="h-3 w-3 text-zinc-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Custom Text
+          {customEnabled && customLines.length > 0 && (
+            <span className="ml-1 text-[9px] bg-zinc-600/30 text-zinc-400 rounded-full px-1.5">{customLines.length}</span>
+          )}
+        </button>
       </div>
 
-      {enabled && (
+      {/* ── AUTO TAB ── */}
+      {activeTab === 'auto' && (
         <div className="space-y-4">
-          {/* Generate button */}
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={status === 'loading'}
-            className="flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition-colors duration-150"
-          >
-            {status === 'loading' ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                Transcribing...
-              </>
-            ) : (
-              <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                </svg>
-                Generate Subtitles
-              </>
-            )}
-          </button>
-
-          {error && (
-            <div className="bg-red-900/20 border border-red-800/50 rounded-lg px-4 py-3">
-              <p className="text-red-400 text-sm">{error}</p>
-            </div>
-          )}
-
-          {/* Style controls */}
-          <div className="space-y-4 border-t border-zinc-800 pt-4">
-            <h3 className="text-sm font-medium text-zinc-300">Style</h3>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs text-zinc-400">
-                <label>Font Size</label>
-                <span>{fontSize}px</span>
-              </div>
-              <input
-                type="range"
-                min={24}
-                max={72}
-                value={fontSize}
-                onChange={e => onFontSizeChange(Number(e.target.value))}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-zinc-600">
-                <span>24</span>
-                <span>72</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Color</label>
-              <div className="flex items-center gap-2 flex-wrap">
-                {PRESET_COLORS.map(p => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    onClick={() => onColorChange(p.value)}
-                    title={p.label}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
-                      color === p.value ? 'border-violet-500 scale-110' : 'border-zinc-600 hover:border-zinc-400'
-                    }`}
-                    style={{ backgroundColor: `#${p.value}` }}
-                  />
-                ))}
-                <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
-                  <span>Custom:</span>
-                  <input
-                    type="color"
-                    value={hexToInput(color)}
-                    onChange={e => onColorChange(inputToHex(e.target.value))}
-                    className="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0"
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Position</label>
-              <div className="flex gap-2">
-                {(['top', 'middle', 'bottom'] as const).map(p => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => onPositionChange(p)}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      position === p
-                        ? 'bg-violet-600 text-white'
-                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                    }`}
-                  >
-                    {p.charAt(0).toUpperCase() + p.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => onToggleAuto(!autoEnabled)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoEnabled ? 'bg-violet-600' : 'bg-zinc-700'}`}>
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${autoEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </button>
+            <span className="text-sm text-zinc-300">{autoEnabled ? 'Enabled' : 'Disabled'}</span>
           </div>
 
-          {lines.length > 0 && (
-            <div className="space-y-3 border-t border-zinc-800 pt-4">
-              <h3 className="text-sm font-medium text-zinc-300">Edit Subtitles ({lines.length} lines)</h3>
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {lines.map(line => (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-medium bg-violet-600/20 text-violet-400 border border-violet-600/30 rounded-full px-2 py-0.5">AI · Whisper</span>
+              <span className="text-xs text-zinc-500">Transcribes speech — no internet needed</span>
+            </div>
+            <button type="button" onClick={onGenerate} disabled={autoStatus === 'loading'}
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+              {autoStatus === 'loading' ? (
+                <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Transcribing...</>
+              ) : (
+                <><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>Generate Subtitles</>
+              )}
+            </button>
+          </div>
+
+          {autoError && <div className="bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2"><p className="text-red-400 text-xs">{autoError}</p></div>}
+          {autoStatus === 'done' && autoLines.length === 0 && <p className="text-xs text-zinc-500">No speech detected.</p>}
+
+          {autoLines.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-zinc-400 font-medium">Edit lines ({autoLines.length})</p>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                {autoLines.map(line => (
                   <div key={line.id} className="flex gap-2 items-start">
-                    <span className="text-xs text-zinc-600 mt-2 font-mono flex-shrink-0 w-10 text-right">
-                      {Math.floor(line.start / 60)}:{String(Math.floor(line.start % 60)).padStart(2, '0')}
+                    <span className="text-[10px] text-zinc-600 mt-1.5 font-mono flex-shrink-0 w-8 text-right">
+                      {Math.floor(line.start / 60)}:{String(Math.floor(line.start % 60)).padStart(2,'0')}
                     </span>
-                    <textarea
-                      value={line.text}
-                      onChange={e => handleTextChange(line.id, e.target.value)}
-                      rows={1}
-                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-y"
-                    />
+                    <textarea value={line.text} rows={1}
+                      onChange={e => onAutoLinesChange(autoLines.map(l => l.id === line.id ? { ...l, text: e.target.value } : l))}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y" />
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          <div className="border-t border-zinc-800 pt-3">
+            <p className="text-xs font-medium text-zinc-400 mb-3">Style</p>
+            <StyleControls style={autoStyle} onChange={patch => {
+              if (patch.fontSize !== undefined)     onAutoFontSizeChange(patch.fontSize)
+              if (patch.color !== undefined)        onAutoColorChange(patch.color)
+              if (patch.fontFamily !== undefined)   onAutoFontFamilyChange(patch.fontFamily)
+              if (patch.bold !== undefined)         onAutoBoldChange(patch.bold)
+              if (patch.outlineWidth !== undefined) onAutoOutlineWidthChange(patch.outlineWidth)
+            }} />
+            <p className="text-xs text-zinc-600 mt-3">Position: drag the dot in the preview →</p>
+            <p className="text-xs font-mono text-zinc-700">{autoPosition.x}% · {autoPosition.y}%</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── CUSTOM TEXT TAB ── */}
+      {activeTab === 'custom' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => onToggleCustom(!customEnabled)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${customEnabled ? 'bg-violet-600' : 'bg-zinc-700'}`}>
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${customEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </button>
+            <span className="text-sm text-zinc-300">{customEnabled ? 'Enabled' : 'Disabled'}</span>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs text-zinc-500">One line per subtitle — evenly spaced across the clip.</p>
+            <textarea value={manualText} onChange={e => setManualText(e.target.value)} rows={4}
+              placeholder={"First line of text\nSecond line\nEach line = one subtitle"}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y" />
+            <button type="button" onClick={handleSetCustomLines} disabled={!manualText.trim()}
+              className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-100 rounded-lg text-xs font-medium transition-colors">
+              Set as subtitles
+            </button>
+          </div>
+
+          {customLines.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-zinc-400 font-medium">Edit lines ({customLines.length})</p>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {customLines.map(line => (
+                  <div key={line.id} className="flex gap-2 items-start bg-zinc-900/50 rounded-lg p-1.5">
+                    {/* Editable timestamps */}
+                    <div className="flex flex-col gap-0.5 flex-shrink-0">
+                      <label className="text-[9px] text-zinc-600 font-mono text-center">in</label>
+                      <input
+                        type="number" step={0.1} min={0}
+                        value={line.start.toFixed(1)}
+                        onChange={e => onCustomLinesChange(customLines.map(l => l.id === line.id ? { ...l, start: parseFloat(e.target.value) || 0 } : l))}
+                        className="w-12 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center"
+                      />
+                      <label className="text-[9px] text-zinc-600 font-mono text-center">out</label>
+                      <input
+                        type="number" step={0.1} min={0}
+                        value={line.end.toFixed(1)}
+                        onChange={e => onCustomLinesChange(customLines.map(l => l.id === line.id ? { ...l, end: parseFloat(e.target.value) || 0 } : l))}
+                        className="w-12 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center"
+                      />
+                    </div>
+                    <textarea value={line.text} rows={2}
+                      onChange={e => onCustomLinesChange(customLines.map(l => l.id === line.id ? { ...l, text: e.target.value } : l))}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-zinc-800 pt-3">
+            <p className="text-xs font-medium text-zinc-400 mb-3">Style</p>
+            <StyleControls style={customStyle} onChange={patch => {
+              if (patch.fontSize !== undefined)     onCustomFontSizeChange(patch.fontSize)
+              if (patch.color !== undefined)        onCustomColorChange(patch.color)
+              if (patch.fontFamily !== undefined)   onCustomFontFamilyChange(patch.fontFamily)
+              if (patch.bold !== undefined)         onCustomBoldChange(patch.bold)
+              if (patch.outlineWidth !== undefined) onCustomOutlineWidthChange(patch.outlineWidth)
+            }} />
+            <p className="text-xs text-zinc-600 mt-3">Position: drag the dot in the preview →</p>
+            <p className="text-xs font-mono text-zinc-700">{customPosition.x}% · {customPosition.y}%</p>
+          </div>
         </div>
       )}
     </div>

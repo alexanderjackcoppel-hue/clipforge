@@ -15,14 +15,19 @@ export function useJobProgress(
   onEvent: (event: ProgressEvent) => void
 ) {
   const esRef = useRef<EventSource | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const doneRef = useRef(false)
   const onEventRef = useRef(onEvent)
   onEventRef.current = onEvent
 
   useEffect(() => {
     if (!jobId) return
 
+    doneRef.current = false
     esRef.current?.close()
+    if (pollRef.current) clearInterval(pollRef.current)
 
+    // --- SSE ---
     const es = new EventSource(`/jobs/${jobId}/progress`)
     esRef.current = es
 
@@ -31,7 +36,9 @@ export function useJobProgress(
         const data = JSON.parse(e.data) as ProgressEvent
         onEventRef.current(data)
         if (data.type === 'done' || data.type === 'error') {
+          doneRef.current = true
           es.close()
+          if (pollRef.current) clearInterval(pollRef.current)
         }
       } catch {
         // ignore parse errors
@@ -39,11 +46,47 @@ export function useJobProgress(
     }
 
     es.onerror = () => {
-      // SSE reconnects automatically; only close on done/error
+      // SSE auto-reconnects; polling covers the gap
     }
 
+    // --- Polling fallback ---
+    // If SSE doesn't deliver a terminal event within 2 seconds, start polling
+    // the REST status endpoint every 1.5s. This handles: server restarts, proxy
+    // buffering, and fast jobs that complete before the EventSource connects.
+    const pollStart = setTimeout(() => {
+      if (doneRef.current) return
+      pollRef.current = setInterval(async () => {
+        if (doneRef.current) {
+          clearInterval(pollRef.current!)
+          return
+        }
+        try {
+          const res = await fetch(`/jobs/${jobId}`)
+          if (!res.ok) return
+          const { status, events } = await res.json() as {
+            status: string
+            events: ProgressEvent[]
+          }
+          // Replay any events not yet delivered by SSE
+          for (const event of events) {
+            onEventRef.current(event)
+          }
+          if (status === 'done' || status === 'error') {
+            doneRef.current = true
+            es.close()
+            clearInterval(pollRef.current!)
+          }
+        } catch {
+          // network error - keep polling
+        }
+      }, 1500)
+    }, 2000)
+
     return () => {
+      doneRef.current = true
       es.close()
+      clearTimeout(pollStart)
+      if (pollRef.current) clearInterval(pollRef.current)
     }
   }, [jobId])
 }

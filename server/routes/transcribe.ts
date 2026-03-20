@@ -6,6 +6,14 @@ import { spawnJob } from '../lib/spawnJob.js'
 import { parseSRT } from '../lib/parseSRT.js'
 import { TMP_DIR } from '../index.js'
 
+const WHISPER_MODELS_DIR = '/opt/homebrew/share/whisper-cpp/models'
+const MODEL_FILES: Record<string, string> = {
+  tiny:   'ggml-tiny.bin',
+  base:   'ggml-base.bin',
+  small:  'ggml-small.bin',
+  medium: 'ggml-medium.bin',
+}
+
 const router = Router()
 
 router.post('/', async (req, res) => {
@@ -16,9 +24,14 @@ router.post('/', async (req, res) => {
     return
   }
 
-  const ALLOWED_MODELS = new Set(['tiny', 'base', 'small', 'medium'])
-  if (!ALLOWED_MODELS.has(model)) {
+  if (!(model in MODEL_FILES)) {
     res.status(400).json({ error: 'Invalid model. Use: tiny, base, small, medium' })
+    return
+  }
+
+  const modelPath = join(WHISPER_MODELS_DIR, MODEL_FILES[model])
+  if (!existsSync(modelPath)) {
+    res.status(400).json({ error: `Model not found: ${modelPath}. Download it from https://huggingface.co/ggerganov/whisper.cpp` })
     return
   }
 
@@ -57,15 +70,15 @@ router.post('/', async (req, res) => {
 
       jobManager.sendProgress(opJobId, { type: 'progress', stage: 'transcribing', percent: 30 })
 
-      // Use whisper-cpp CLI
-      await spawnJob('whisper-cpp', [
-        '--model', model,
+      // Use whisper-cli (Homebrew installs as whisper-cli, not whisper-cpp)
+      await spawnJob('whisper-cli', [
+        '-m', modelPath,
         '--output-srt',
         '--output-file', join(jobDir, `subtitles${sfx}`),
         audioPath,
       ])
 
-      // whisper-cpp may output to audioPath.srt or the specified output path
+      // whisper-cli may output to audioPath.srt or the specified output path
       const whisperSrtPath = audioPath + '.srt'
       let srtContent = ''
       if (existsSync(whisperSrtPath)) {
@@ -74,20 +87,13 @@ router.post('/', async (req, res) => {
       } else if (existsSync(srtPath)) {
         srtContent = readFileSync(srtPath, 'utf-8')
       } else {
-        throw new Error('whisper-cpp did not produce an SRT file. Is the model downloaded? Run: whisper-cpp --download-model base')
+        throw new Error('whisper-cli did not produce an SRT file. Check that the model file exists.')
       }
 
       // Parse SRT into structured lines
       const subtitles = parseSRT(srtContent)
 
-      // Send done with subtitles payload (extend the base type)
-      const doneEvent = {
-        type: 'done' as const,
-        stage: 'transcribed',
-        percent: 100,
-        subtitles,
-      }
-      jobManager.sendProgress(opJobId, doneEvent as unknown as Parameters<typeof jobManager.sendProgress>[1])
+      jobManager.sendProgress(opJobId, { type: 'done', stage: 'transcribed', percent: 100, subtitles })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Transcription failed'
       const msg = classifyWhisperError(message)
@@ -98,8 +104,8 @@ router.post('/', async (req, res) => {
 
 
 function classifyWhisperError(msg: string): string {
-  if (msg.includes('not found') || msg.includes('ENOENT')) return 'whisper-cpp not installed. Run: brew install whisper-cpp'
-  if (msg.includes('model') || msg.includes('ggml')) return 'Whisper model not found. Run: whisper-cpp --download-model base'
+  if (msg.includes('not found') || msg.includes('ENOENT')) return 'whisper-cli not installed. Run: brew install whisper-cpp'
+  if (msg.includes('model') || msg.includes('ggml')) return 'Whisper model not found at expected path.'
   if (msg.includes('audio')) return 'No audio track found in this video.'
   return `Transcription failed: ${msg.slice(0, 200)}`
 }

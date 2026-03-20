@@ -86,7 +86,18 @@ class JobManager {
   connectSSE(jobId: string, res: Response): void {
     const job = this.jobs.get(jobId)
 
-    // Send buffered events first
+    // Register client and cleanup handler before replaying events so that
+    // res.on('close') is always wired up regardless of job state.
+    const clientList = this.clients.get(jobId) ?? []
+    clientList.push(res)
+    this.clients.set(jobId, clientList)
+    res.on('close', () => {
+      const list = this.clients.get(jobId) ?? []
+      this.clients.set(jobId, list.filter(r => r !== res))
+    })
+
+    // Replay buffered events (catches fast-completing jobs where the SSE
+    // client connects after the job is already done)
     if (job) {
       for (const event of job.events) {
         try {
@@ -97,20 +108,12 @@ class JobManager {
       }
     }
 
-    // If job is already terminal, no need to keep connection
-    if (job && (job.status === 'done' || job.status === 'error')) {
-      res.end()
-      return
-    }
-
-    const clientList = this.clients.get(jobId) ?? []
-    clientList.push(res)
-    this.clients.set(jobId, clientList)
-
-    res.on('close', () => {
-      const list = this.clients.get(jobId) ?? []
-      this.clients.set(jobId, list.filter(r => r !== res))
-    })
+    // Do NOT call res.end() here — even for already-terminal jobs.
+    // Calling res.end() immediately causes Next.js dev proxy to treat this as
+    // a buffered HTTP response rather than an SSE stream, dropping events for
+    // fast-completing jobs (e.g. short YouTube Shorts).
+    // The SSE hook closes the EventSource on receiving done/error, which
+    // triggers res.on('close') above to remove the client from the list.
   }
 
   enqueue(fn: JobFn): Promise<void> {
@@ -146,7 +149,7 @@ class JobManager {
 
   getActiveJobIds(): Set<string> {
     const active = new Set<string>()
-    for (const [id, job] of this.jobs) {
+    for (const [id, job] of Array.from(this.jobs.entries())) {
       if (job.status === 'queued' || job.status === 'running') {
         active.add(id)
       }

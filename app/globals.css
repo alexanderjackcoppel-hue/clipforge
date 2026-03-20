@@ -5,6 +5,12 @@
 /* Custom scrollbar styles for dark theme */
 :root {
   color-scheme: dark;
+  font-family: var(--font-ui), system-ui, sans-serif;
+}
+
+/* Monospace override — JetBrains Mono for all font-mono instances */
+.font-mono, code, pre, [class*="font-mono"] {
+  font-family: var(--font-mono), 'SF Mono', 'Fira Code', monospace;
 }
 
 * {

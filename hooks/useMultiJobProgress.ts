@@ -9,7 +9,13 @@ export function useMultiJobProgress(
   const onEventRef = useRef(onEvent)
   onEventRef.current = onEvent
 
-  const sourcesRef = useRef<Map<string, { clipId: string; es: EventSource }>>(new Map())
+  const sourcesRef = useRef<Map<string, {
+    clipId: string
+    es: EventSource
+    done: boolean
+    pollTimer: ReturnType<typeof setTimeout> | null
+    pollInterval: ReturnType<typeof setInterval> | null
+  }>>(new Map())
 
   // Reconcile EventSources on every render (idempotent: skips already-open jobIds)
   useEffect(() => {
@@ -27,15 +33,23 @@ export function useMultiJobProgress(
       if (sourcesRef.current.has(jobId)) continue
       const clipId = jobIdToClipId[jobId]
       const es = new EventSource(`/jobs/${jobId}/progress`)
-      sourcesRef.current.set(jobId, { clipId, es })
+      const entry = { clipId, es, done: false, pollTimer: null as ReturnType<typeof setTimeout> | null, pollInterval: null as ReturnType<typeof setInterval> | null }
+      sourcesRef.current.set(jobId, entry)
+
+      const cleanup = () => {
+        entry.done = true
+        es.close()
+        if (entry.pollTimer) clearTimeout(entry.pollTimer)
+        if (entry.pollInterval) clearInterval(entry.pollInterval)
+        sourcesRef.current.delete(jobId)
+      }
 
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data) as ProgressEvent
           onEventRef.current(clipId, data)
           if (data.type === 'done' || data.type === 'error') {
-            es.close()
-            sourcesRef.current.delete(jobId)
+            cleanup()
           }
         } catch {
           // ignore parse errors
@@ -43,8 +57,35 @@ export function useMultiJobProgress(
       }
 
       es.onerror = () => {
-        // SSE reconnects automatically; only close on done/error
+        // SSE auto-reconnects; polling covers the gap
       }
+
+      // Polling fallback: after 2s with no terminal event, poll every 1.5s
+      entry.pollTimer = setTimeout(() => {
+        if (entry.done) return
+        entry.pollInterval = setInterval(async () => {
+          if (entry.done) {
+            clearInterval(entry.pollInterval!)
+            return
+          }
+          try {
+            const res = await fetch(`/jobs/${jobId}`)
+            if (!res.ok) return
+            const { status, events } = await res.json() as {
+              status: string
+              events: ProgressEvent[]
+            }
+            for (const event of events) {
+              onEventRef.current(clipId, event)
+            }
+            if (status === 'done' || status === 'error') {
+              cleanup()
+            }
+          } catch {
+            // keep polling
+          }
+        }, 1500)
+      }, 2000)
     }
 
     // Close EventSources for jobIds no longer in the map
@@ -53,7 +94,13 @@ export function useMultiJobProgress(
       if (!desiredJobIds.has(jobId)) toClose.push(jobId)
     }
     for (const jobId of toClose) {
-      sourcesRef.current.get(jobId)?.es.close()
+      const entry = sourcesRef.current.get(jobId)
+      if (entry) {
+        entry.done = true
+        entry.es.close()
+        if (entry.pollTimer) clearTimeout(entry.pollTimer)
+        if (entry.pollInterval) clearInterval(entry.pollInterval)
+      }
       sourcesRef.current.delete(jobId)
     }
   })
@@ -61,8 +108,11 @@ export function useMultiJobProgress(
   // Close all on unmount
   useEffect(() => {
     return () => {
-      for (const { es } of Array.from(sourcesRef.current.values())) {
-        es.close()
+      for (const entry of Array.from(sourcesRef.current.values())) {
+        entry.done = true
+        entry.es.close()
+        if (entry.pollTimer) clearTimeout(entry.pollTimer)
+        if (entry.pollInterval) clearInterval(entry.pollInterval)
       }
       sourcesRef.current.clear()
     }

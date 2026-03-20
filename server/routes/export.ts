@@ -55,7 +55,9 @@ router.post('/', (req, res) => {
   upload.fields([
     { name: 'voiceover', maxCount: 1 },
     { name: 'overlay', maxCount: 1 },
-  ])(req, res as Parameters<ReturnType<typeof multer>['fields']>[1], async (err) => {
+    { name: 'bgMusic', maxCount: 1 },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ])(req, res as any, async (err: unknown) => {
     if (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : 'Upload error' })
       return
@@ -64,12 +66,31 @@ router.post('/', (req, res) => {
     const {
       subtitles,
       subtitleStyle,
+      customTextSubtitles,
+      customTextSubtitleStyle,
       voiceoverEnabled,
       overlayEnabled,
+      bgMusicEnabled,
       overlayPosition = 'bottom-right',
       overlayScale = '20',
       originalVolume = '0.8',
       voiceoverVolume = '1.0',
+      bgMusicVolume = '0.7',
+      bgMusicFadeIn,
+      bgMusicFadeOut,
+      videoFormat = 'standard',
+      socialBgColor = 'FFFFFF',
+      socialVideoScale = '70',
+      videoOffsetX = '0',
+      videoOffsetY = '0',
+      cinematicBgColor = '000000',
+      videoBarHeight = '34',
+      fadeIn,
+      fadeOut,
+      clipDuration,
+      zoomEnabled,
+      zoomX,
+      zoomY,
     } = req.body as Record<string, string>
 
     // preJobId and preClipSuffix are validated before multer
@@ -87,25 +108,54 @@ router.post('/', (req, res) => {
     const files = (req.files as { [fieldname: string]: Express.Multer.File[] }) || {}
     const voiceoverFile = voiceoverEnabled === 'true' ? files['voiceover']?.[0]?.path : undefined
     const overlayFile = overlayEnabled === 'true' ? files['overlay']?.[0]?.path : undefined
+    const bgMusicFile = bgMusicEnabled === 'true' ? files['bgMusic']?.[0]?.path : undefined
 
-    // Build ASS subtitle file if subtitles provided
+    // Helper to build a style object with safe defaults
+    function parseStyle(raw: string | undefined, defaults: Partial<SubtitleStyle> = {}): SubtitleStyle {
+      const p = raw ? JSON.parse(raw) : {}
+      return {
+        fontSize: p.fontSize ?? defaults.fontSize ?? 48,
+        color: p.color ?? defaults.color ?? 'FFFFFF',
+        position: p.position ?? defaults.position ?? { x: 50, y: 85 },
+        fontFamily: p.fontFamily ?? defaults.fontFamily ?? 'Arial',
+        bold: p.bold ?? defaults.bold ?? true,
+        outlineWidth: p.outlineWidth ?? defaults.outlineWidth ?? 3,
+      }
+    }
+
+    // Build ASS file for auto-generated subtitles
     let assPath: string | undefined
     if (subtitles) {
       try {
         const parsedSubs: SubtitleLine[] = JSON.parse(subtitles)
-        const style: SubtitleStyle = subtitleStyle
-          ? JSON.parse(subtitleStyle)
-          : { fontSize: 48, color: 'FFFFFF', position: 'bottom' }
+        const style = parseStyle(subtitleStyle)
         if (!/^[0-9A-Fa-f]{6}$/.test(style.color)) {
           res.status(400).json({ error: 'Invalid subtitle color. Use a 6-digit hex value (e.g. FFFFFF).' })
           return
         }
-        const assContent = buildASSSubtitles(parsedSubs, style)
         assPath = join(jobDir, `subtitles${sfx}.ass`)
-        writeFileSync(assPath, assContent)
+        writeFileSync(assPath, buildASSSubtitles(parsedSubs, style))
       } catch (e) {
         if ((e as NodeJS.ErrnoException)?.code === undefined && res.headersSent) return
         console.error('Failed to build ASS subtitles:', e)
+      }
+    }
+
+    // Build ASS file for custom text layer
+    let customAssPath: string | undefined
+    if (customTextSubtitles) {
+      try {
+        const parsedSubs: SubtitleLine[] = JSON.parse(customTextSubtitles)
+        const style = parseStyle(customTextSubtitleStyle, { color: 'FFFF00', position: { x: 50, y: 15 } })
+        if (!/^[0-9A-Fa-f]{6}$/.test(style.color)) {
+          res.status(400).json({ error: 'Invalid custom text color.' })
+          return
+        }
+        customAssPath = join(jobDir, `customtext${sfx}.ass`)
+        writeFileSync(customAssPath, buildASSSubtitles(parsedSubs, style))
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException)?.code === undefined && res.headersSent) return
+        console.error('Failed to build custom text ASS:', e)
       }
     }
 
@@ -127,12 +177,30 @@ router.post('/', (req, res) => {
           inputVideo: trimmedPath,
           outputVideo: finalPath,
           subtitlesFile: assPath,
+          customTextFile: customAssPath,
           voiceoverFile,
           originalVolume: parseFloat(originalVolume) || 0.8,
           voiceoverVolume: parseFloat(voiceoverVolume) || 1.0,
+          bgMusicFile,
+          bgMusicVolume: parseFloat(bgMusicVolume) || 0.7,
+          bgMusicFadeIn: bgMusicFadeIn === 'true',
+          bgMusicFadeOut: bgMusicFadeOut === 'true',
           overlayImage: overlayFile,
           overlayPosition: overlayPos,
           overlayScale: parseInt(overlayScale) || 20,
+          videoFormat: (['social-post', 'cinematic', 'blur-bg'].includes(videoFormat) ? videoFormat : 'standard') as 'standard' | 'social-post' | 'cinematic' | 'blur-bg',
+          socialBgColor,
+          socialVideoScale: parseInt(socialVideoScale) || 70,
+          videoOffsetX: parseFloat(videoOffsetX) || 0,
+          videoOffsetY: parseFloat(videoOffsetY) || 0,
+          cinematicBgColor,
+          videoBarHeight: parseInt(videoBarHeight) || 34,
+          fadeIn: fadeIn === 'true',
+          fadeOut: fadeOut === 'true',
+          clipDuration: clipDuration ? parseFloat(clipDuration) : undefined,
+          zoomEnabled: zoomEnabled === 'true',
+          zoomX: zoomX ? parseFloat(zoomX) : 50,
+          zoomY: zoomY ? parseFloat(zoomY) : 50,
         })
 
         let totalDuration: number | null = null

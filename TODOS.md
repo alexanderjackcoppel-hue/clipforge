@@ -10,13 +10,7 @@
 
 ---
 
-## Surface 60-second duration warning in UI
-**What:** Show a visible UI warning (not a hard error) when the trim duration exceeds 60 seconds.
-**Why:** YouTube Shorts rejects videos longer than 60s. Currently only a `console.warn` fires — the user has no indication until their upload fails on YouTube.
-**Pros:** Saves users the frustration of a successful export that can't be uploaded.
-**Cons:** Minor — adds a conditional warning component to TrimStep.
-**Context:** See `server/routes/trim.ts` — `console.warn` on line ~30 when `duration > 60`. The warning should be surfaced back to the frontend as part of the trim response (e.g. `{ jobId, durationWarning: true }`) and displayed in the TrimStep UI.
-**Depends on:** None.
+## ~~Surface 60-second duration warning in UI~~ ✓ DONE — Added yellow warning banner in `TrimStep.tsx` on 2026-03-19.
 
 ---
 
@@ -27,3 +21,27 @@
 **Cons:** Requires a retry counter in `useJobProgress` and a new error state in AppState.
 **Context:** See `hooks/useJobProgress.ts` — `es.onerror` handler is currently a no-op. After N retries (e.g. 5), fire a special `{ type: 'error', message: 'server_restart' }` synthetic event. Each step component can handle this gracefully.
 **Depends on:** None.
+
+---
+
+## ~~Create DESIGN.md~~ ✓ DONE — Fixed by `/design-consultation` on 2026-03-19. See `DESIGN.md`.
+
+---
+
+## Keyboard navigation in clip list
+**What:** Add arrow-key navigation between clips in TrimStep.
+**Why:** Keyboard users cannot move between clips without Tab. For 5+ clips this is friction. Found during `/plan-design-review`.
+**Pros:** Meets WCAG 2.1 AA composite widget pattern. ~20 lines.
+**Cons:** Requires managing focus with refs.
+**Context:** Each clip row has a label-edit button, trim button, delete button. Arrow keys should move between rows; Enter activates trim.
+**Depends on:** Nothing.
+
+---
+
+## Screen reader announcement on clip add
+**What:** Add a visually-hidden `aria-live` region announcing "Clip N added" when `onAddClip` fires in TrimStep.
+**Why:** No audio feedback on clip add. Screen reader users have no confirmation. Found during `/plan-design-review`.
+**Pros:** ~5 lines, `aria-live="polite"`.
+**Cons:** Negligible.
+**Context:** `TrimStep.tsx`.
+**Depends on:** Nothing.

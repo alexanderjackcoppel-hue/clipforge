@@ -1,8 +1,18 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Instrument_Sans, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const instrumentSans = Instrument_Sans({
+  subsets: ['latin'],
+  variable: '--font-ui',
+  weight: ['400', '500', '600', '700'],
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+  weight: ['400', '500', '600'],
+})
 
 export const metadata: Metadata = {
   title: 'ClipForge',
@@ -12,7 +22,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.className} bg-zinc-950 text-zinc-100 min-h-screen`}>
+      <body className={`${instrumentSans.variable} ${jetbrainsMono.variable} font-sans bg-zinc-950 text-zinc-100 min-h-screen`}>
         {children}
       </body>
     </html>

@@ -49,7 +49,7 @@ export default function ExportStep({ clips, onExportClip, onExportAll, disabled 
       {/* Per-clip rows */}
       <div className="space-y-2">
         {trimmedClips.map(clip => (
-          <div key={clip.id} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-3">
+          <div key={clip.id} className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-3 py-3">
             <div className="flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <span className="text-sm font-medium text-zinc-200">{clip.label}</span>
@@ -69,13 +69,23 @@ export default function ExportStep({ clips, onExportClip, onExportAll, disabled 
                   <span className="text-xs text-zinc-400 w-8 text-right">{clip.exportProgress}%</span>
                 </div>
               ) : clip.exportStatus === 'done' && clip.exportUrl ? (
-                <a
-                  href={clip.exportUrl}
-                  download={`${clip.label}.mp4`}
-                  className="text-xs bg-emerald-700 hover:bg-emerald-600 text-white font-medium rounded px-3 py-1.5 transition-colors whitespace-nowrap"
-                >
-                  Download MP4
-                </a>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={clip.exportUrl}
+                    download={`${clip.label}.mp4`}
+                    className="text-xs bg-emerald-700 hover:bg-emerald-600 text-white font-medium rounded px-3 py-1.5 transition-colors whitespace-nowrap"
+                  >
+                    Download MP4
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => onExportClip(clip.id)}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors whitespace-nowrap"
+                    title="Re-export with current settings"
+                  >
+                    Re-export
+                  </button>
+                </div>
               ) : (
                 <button
                   type="button"
@@ -86,18 +96,6 @@ export default function ExportStep({ clips, onExportClip, onExportAll, disabled 
                 </button>
               )}
             </div>
-
-            {/* Export progress bar (expanded) */}
-            {clip.exportStatus === 'loading' && (
-              <div className="mt-2">
-                <div className="w-full bg-zinc-800 rounded-full h-1 overflow-hidden">
-                  <div
-                    className="bg-violet-500 h-1 rounded-full transition-all duration-300"
-                    style={{ width: `${clip.exportProgress}%` }}
-                  />
-                </div>
-              </div>
-            )}
 
             {/* Error */}
             {clip.exportError && (
