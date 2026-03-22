@@ -78,7 +78,11 @@ export default function ImportStep({ status, progress, error, videoUrl, onDownlo
       {/* Error */}
       {error && (
         <div className="bg-red-900/20 border border-red-800/50 rounded-lg px-4 py-3">
-          <p className="text-red-400 text-sm">{error}</p>
+          <p className="text-red-400 text-sm">
+            {error === 'server_restart'
+              ? 'Server restarted — please refresh the page and try again.'
+              : error}
+          </p>
         </div>
       )}
 

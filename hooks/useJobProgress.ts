@@ -10,6 +10,8 @@ export interface ProgressEvent {
   subtitles?: Array<{ id: number; start: number; end: number; text: string }>
 }
 
+const MAX_SSE_ERRORS = 5
+
 export function useJobProgress(
   jobId: string | null,
   onEvent: (event: ProgressEvent) => void
@@ -17,6 +19,7 @@ export function useJobProgress(
   const esRef = useRef<EventSource | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const doneRef = useRef(false)
+  const errorCountRef = useRef(0)
   const onEventRef = useRef(onEvent)
   onEventRef.current = onEvent
 
@@ -24,6 +27,7 @@ export function useJobProgress(
     if (!jobId) return
 
     doneRef.current = false
+    errorCountRef.current = 0
     esRef.current?.close()
     if (pollRef.current) clearInterval(pollRef.current)
 
@@ -34,6 +38,7 @@ export function useJobProgress(
     es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data) as ProgressEvent
+        errorCountRef.current = 0 // reset on successful message
         onEventRef.current(data)
         if (data.type === 'done' || data.type === 'error') {
           doneRef.current = true
@@ -46,7 +51,16 @@ export function useJobProgress(
     }
 
     es.onerror = () => {
-      // SSE auto-reconnects; polling covers the gap
+      if (doneRef.current) return
+      errorCountRef.current++
+      if (errorCountRef.current >= MAX_SSE_ERRORS) {
+        // Server likely restarted — stop reconnecting and notify the user
+        doneRef.current = true
+        es.close()
+        if (pollRef.current) clearInterval(pollRef.current)
+        onEventRef.current({ type: 'error', message: 'server_restart' })
+      }
+      // Otherwise SSE auto-reconnects; polling covers the gap
     }
 
     // --- Polling fallback ---

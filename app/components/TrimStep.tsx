@@ -72,9 +72,12 @@ export default function TrimStep({
   const [duration, setDuration] = useState(0)
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null)
   const [videoAR, setVideoAR] = useState<number | null>(null)
+  const [announcement, setAnnouncement] = useState('')
+  const [focusedClipIndex, setFocusedClipIndex] = useState<number | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const cropCanvasRef = useRef<HTMLCanvasElement>(null)
+  const clipRowRefs = useRef<(HTMLDivElement | null)[]>([])
   const cropContainerRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const dragging = useRef<'start' | 'end' | null>(null)
@@ -85,6 +88,13 @@ export default function TrimStep({
   useEffect(() => { startSecsRef.current = startSecs }, [startSecs])
   useEffect(() => { endSecsRef.current = endSecs }, [endSecs])
   useEffect(() => { durationRef.current = duration }, [duration])
+
+  // Clear announcement after screen reader has had time to read it
+  useEffect(() => {
+    if (!announcement) return
+    const t = setTimeout(() => setAnnouncement(''), 1500)
+    return () => clearTimeout(t)
+  }, [announcement])
 
   // Crop drag state
   type CropDragMode = 'idle' | 'drawing' | 'moving' | 'tl' | 'tr' | 'bl' | 'br'
@@ -397,6 +407,7 @@ export default function TrimStep({
               type="button"
               onClick={() => {
                 onAddClip(startSecs, endSecs)
+                setAnnouncement(`Clip ${clips.length + 1} added`)
                 const newEnd = Math.min(endSecs + (endSecs - startSecs), duration)
                 setStartSecs(endSecs)
                 setEndSecs(newEnd > endSecs ? newEnd : Math.min(endSecs + 30, duration))
@@ -431,9 +442,39 @@ export default function TrimStep({
             )}
           </div>
 
-          <div className="space-y-2">
-            {clips.map(clip => (
-              <div key={clip.id} className="bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-3 py-2.5">
+          {/* aria-live region for screen reader announcements */}
+          <div aria-live="polite" aria-atomic="true" className="sr-only">
+            {announcement}
+          </div>
+
+          <div className="space-y-2" role="list" aria-label="Clips">
+            {clips.map((clip, idx) => (
+              <div
+                key={clip.id}
+                role="listitem"
+                tabIndex={0}
+                ref={el => { clipRowRefs.current[idx] = el }}
+                onFocus={() => setFocusedClipIndex(idx)}
+                onBlur={() => setFocusedClipIndex(null)}
+                onKeyDown={e => {
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                    e.preventDefault()
+                    const next = clipRowRefs.current[idx + 1]
+                    if (next) next.focus()
+                  } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                    e.preventDefault()
+                    const prev = clipRowRefs.current[idx - 1]
+                    if (prev) prev.focus()
+                  } else if (e.key === 'Enter' && clip.trimStatus === 'idle') {
+                    onTrimClip(clip.id)
+                  } else if ((e.key === 'Delete' || e.key === 'Backspace') && !editingLabelId) {
+                    onRemoveClip(clip.id)
+                  }
+                }}
+                className={`bg-zinc-800/50 border rounded-lg px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-900 ${
+                  focusedClipIndex === idx ? 'border-zinc-600/50' : 'border-zinc-700/50'
+                }`}
+              >
                 <div className="flex items-center gap-2 min-w-0">
                   {/* Label */}
                   {editingLabelId === clip.id ? (
@@ -529,7 +570,11 @@ export default function TrimStep({
 
                 {/* Clip-level error */}
                 {clip.trimError && (
-                  <p className="text-red-400 text-xs mt-1.5">{clip.trimError}</p>
+                  <p className="text-red-400 text-xs mt-1.5">
+                    {clip.trimError === 'server_restart'
+                      ? 'Server restarted — please refresh the page and try again.'
+                      : clip.trimError}
+                  </p>
                 )}
 
                 {/* Effects row: fade + zoom */}
