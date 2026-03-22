@@ -66,7 +66,7 @@ export default function ImportStep({ status, progress, error, videoUrl, onDownlo
             <span>Downloading...</span>
             <span>{progress}%</span>
           </div>
-          <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+          <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Download progress">
             <div
               className="bg-violet-500 h-1.5 rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}

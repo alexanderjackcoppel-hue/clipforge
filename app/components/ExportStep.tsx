@@ -60,7 +60,7 @@ export default function ExportStep({ clips, onExportClip, onExportAll, disabled 
 
               {clip.exportStatus === 'loading' ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-24 bg-zinc-800 rounded-full h-1.5">
+                  <div className="w-24 bg-zinc-800 rounded-full h-1.5" role="progressbar" aria-valuenow={clip.exportProgress} aria-valuemin={0} aria-valuemax={100} aria-label="Export progress">
                     <div
                       className="bg-violet-500 h-1.5 rounded-full transition-all duration-300"
                       style={{ width: `${clip.exportProgress}%` }}

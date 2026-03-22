@@ -546,7 +546,7 @@ export default function TrimStep({
                   {/* Status / action */}
                   {clip.trimStatus === 'loading' ? (
                     <div className="flex items-center gap-2">
-                      <div className="w-20 bg-zinc-800 rounded-full h-1">
+                      <div className="w-20 bg-zinc-800 rounded-full h-1" role="progressbar" aria-valuenow={clip.trimProgress} aria-valuemin={0} aria-valuemax={100} aria-label="Trim progress">
                         <div
                           className="bg-violet-500 h-1 rounded-full transition-all duration-300"
                           style={{ width: `${clip.trimProgress}%` }}
