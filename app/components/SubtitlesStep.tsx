@@ -70,7 +70,7 @@ function StyleControls({ style, onChange }: { style: StyleProps; onChange: (p: P
           <label>Size</label><span className="font-mono">{style.fontSize}px</span>
         </div>
         <input type="range" min={16} max={96} value={style.fontSize}
-          onChange={e => onChange({ fontSize: Number(e.target.value) })} className="w-full" />
+          onChange={e => onChange({ fontSize: Number(e.target.value) })} className="w-full" aria-label="Font size" />
       </div>
       <div className="flex gap-3 items-end">
         <div className="space-y-1">
@@ -83,7 +83,7 @@ function StyleControls({ style, onChange }: { style: StyleProps; onChange: (p: P
             <label>Outline</label><span className="font-mono">{style.outlineWidth}px</span>
           </div>
           <input type="range" min={0} max={8} value={style.outlineWidth}
-            onChange={e => onChange({ outlineWidth: Number(e.target.value) })} className="w-full" />
+            onChange={e => onChange({ outlineWidth: Number(e.target.value) })} className="w-full" aria-label="Outline width" />
         </div>
       </div>
       <div className="space-y-1.5">
