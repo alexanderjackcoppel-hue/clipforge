@@ -27,7 +27,7 @@ export default function StepCard({
         <span className="bg-violet-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold flex-shrink-0">
           {number}
         </span>
-        <h2 className="text-lg font-semibold text-zinc-100 flex-1">{title}</h2>
+        <h2 className="text-xl font-semibold text-zinc-100 flex-1 tracking-tight">{title}</h2>
         {hasToggle && onToggle && (
           <button
             type="button"
