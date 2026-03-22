@@ -87,10 +87,10 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     const vidHEven = vidH % 2 === 0 ? vidH : vidH - 1
     const barPxFinal = (1920 - vidHEven) / 2
     filterParts.push(
-      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,split[raw1][raw2];` +
-      `[raw1]boxblur=luma_radius=20:luma_power=2,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[bg];` +
-      `[raw2]scale=1080:${vidHEven}:force_original_aspect_ratio=decrease,` +
-      `pad=1080:${vidHEven}:(1080-iw)/2:0[fg];` +
+      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,split=2[raw1][raw2];` +
+      `[raw1]scale=270:480,boxblur=5:2,scale=1080:1920[bg];` +
+      `[raw2]scale=w=1080:h=${vidHEven}:force_original_aspect_ratio=decrease,` +
+      `pad=1080:${vidHEven}:(ow-iw)/2:(oh-ih)/2,format=yuv420p[fg];` +
       `[bg][fg]overlay=(W-w)/2:${barPxFinal}[sv]`
     )
   } else {
@@ -111,7 +111,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     // x/y expressions keep the zoom target centered, clamped to valid range
     filterParts.push(
       `${lastVideoLabel}zoompan=` +
-      `z='min(1.5,1+t*${zoomRate})':` +
+      `z='min(1.5,1+on/${fps}*${zoomRate})':` +
       `x='max(0,min(iw-iw/zoom,iw*${zx.toFixed(4)}-iw/zoom/2))':` +
       `y='max(0,min(ih-ih/zoom,ih*${zy.toFixed(4)}-ih/zoom/2))':` +
       `d=${frames}:fps=${fps}:s=1080x1920[svz]`
@@ -220,7 +220,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
 
   args.push(
     '-c:v', 'libx264',
-    '-preset', 'fast',
+    '-preset', 'veryfast',
     '-crf', '23',
     '-c:a', 'aac',
     '-b:a', '192k',

@@ -15,7 +15,9 @@ mkdirSync(TMP_DIR, { recursive: true })
 // --- Startup dependency check ---
 function checkBinary(name: string, required: boolean): boolean {
   try {
-    execSync(`which ${name}`, { stdio: 'ignore' })
+    const extraPath = '/opt/homebrew/bin:/usr/local/bin'
+    const env = { ...process.env, PATH: `${extraPath}:${process.env.PATH ?? ''}` }
+    execSync(`which ${name}`, { stdio: 'ignore', env })
     console.log(`✓ ${name} found`)
     return true
   } catch {

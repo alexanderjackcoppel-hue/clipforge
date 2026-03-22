@@ -4,5 +4,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    environmentMatchGlobs: [
+      ['tests/**/*.hook.test.ts', 'jsdom'],
+    ],
   },
 })

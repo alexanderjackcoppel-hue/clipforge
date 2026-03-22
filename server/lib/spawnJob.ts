@@ -53,7 +53,10 @@ export async function spawnJob(
       if (timedOut) {
         reject(new Error(`'${cmd}' timed out after 30 minutes`))
       } else if (code !== 0) {
-        reject(new Error(`'${cmd}' exited with code ${code}.\n${stderr.slice(-800)}`))
+        const cmdStr = `${cmd} ${args.join(' ')}`
+        console.error(`[spawnJob] FAILED (code ${code}): ${cmdStr}`)
+        console.error(`[spawnJob] stderr: ${stderr}`)
+        reject(new Error(`'${cmd}' exited with code ${code}.\n${stderr.slice(-2000)}`))
       } else {
         resolve({ stdout, stderr })
       }

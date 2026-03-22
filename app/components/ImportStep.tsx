@@ -82,18 +82,6 @@ export default function ImportStep({ status, progress, error, videoUrl, onDownlo
         </div>
       )}
 
-      {/* Video preview */}
-      {videoUrl && status === 'done' && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Source video</p>
-          <video
-            src={videoUrl}
-            controls
-            playsInline
-            className="w-full max-h-[400px] rounded-lg object-contain bg-black"
-          />
-        </div>
-      )}
     </div>
   )
 }

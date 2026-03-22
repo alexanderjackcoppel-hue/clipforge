@@ -100,19 +100,10 @@ export default function PreviewPanel({
   // Tracks main video time persistently (survives conditional unmount in crop mode)
   const lastMainVideoTimeRef = useRef(0)
 
-  // Sync crop video time when entering crop mode — deferred until video can seek
-  const cropSyncTimeRef = useRef<number | null>(null)
+  // Reset error state when entering crop mode
   useEffect(() => {
     if (cropEditClipId) {
       setCropVideoError(false)
-      // Use persistent ref — videoRef may be unmounted in crop mode
-      cropSyncTimeRef.current = lastMainVideoTimeRef.current
-      // If already loaded, seek immediately; otherwise onLoadedData will handle it
-      if (cropVideoRef.current && cropVideoRef.current.readyState >= 2) {
-        cropVideoRef.current.currentTime = cropSyncTimeRef.current
-      }
-    } else {
-      cropSyncTimeRef.current = null
     }
   }, [cropEditClipId])
 
@@ -528,23 +519,18 @@ export default function PreviewPanel({
                 <>
                   <video
                     ref={cropVideoRef}
-                    src={`http://127.0.0.1:3001${sourceVideoUrl}`}
+                    src={sourceVideoUrl}
                     style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none', display: cropVideoError ? 'none' : 'block' }}
-                    preload="auto"
+                    autoPlay
+                    loop
                     playsInline
                     muted
-                    onLoadedData={() => {
-                      if (cropVideoRef.current) {
-                        // Seek to synced time (or 0.001 to force first frame render)
-                        cropVideoRef.current.currentTime = cropSyncTimeRef.current ?? 0.001
-                      }
-                    }}
                     onError={() => setCropVideoError(true)}
                   />
                   {cropVideoError && (
                     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#18181b', gap: 8, pointerEvents: 'none' }}>
                       <span style={{ color: '#f87171', fontSize: 13, fontWeight: 500 }}>Video unavailable</span>
-                      <span style={{ color: '#71717a', fontSize: 11 }}>Make sure the API server is running on port 3001</span>
+                      <span style={{ color: '#71717a', fontSize: 11 }}>Re-import your video to reload the source</span>
                     </div>
                   )}
                 </>

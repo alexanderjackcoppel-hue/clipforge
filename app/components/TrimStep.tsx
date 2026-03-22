@@ -74,7 +74,7 @@ export default function TrimStep({
   const [videoAR, setVideoAR] = useState<number | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
-  const cropVideoRef = useRef<HTMLVideoElement>(null)
+  const cropCanvasRef = useRef<HTMLCanvasElement>(null)
   const cropContainerRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const dragging = useRef<'start' | 'end' | null>(null)
@@ -275,13 +275,18 @@ export default function TrimStep({
 
   const openCropEditor = (clip: Clip) => {
     onStartCropEdit(clip.id)
-    // Sync crop video time to main video
-    setTimeout(() => {
-      if (cropVideoRef.current && videoRef.current) {
-        cropVideoRef.current.currentTime = videoRef.current.currentTime
-      }
-    }, 50)
   }
+
+  // Draw the current video frame into the crop canvas after it mounts
+  useEffect(() => {
+    if (!cropEditClipId) return
+    const video = videoRef.current
+    const canvas = cropCanvasRef.current
+    if (!video || !canvas) return
+    canvas.width = video.videoWidth || canvas.offsetWidth
+    canvas.height = video.videoHeight || canvas.offsetHeight
+    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height)
+  }, [cropEditClipId])
 
   return (
     <div className={`space-y-4 ${disabled ? 'pointer-events-none' : ''}`}>
@@ -591,12 +596,9 @@ export default function TrimStep({
                       }}
                       onMouseDown={e => handleCropMouseDown(e, clip)}
                     >
-                      <video
-                        ref={cropVideoRef}
-                        src={sourceVideoUrl}
-                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }}
-                        preload="metadata"
-                        playsInline
+                      <canvas
+                        ref={cropCanvasRef}
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
                       />
 
                       {/* Dark overlay outside crop box — 4 panels */}
