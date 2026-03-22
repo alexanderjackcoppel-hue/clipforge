@@ -10,7 +10,7 @@
 
 ---
 
-## ~~Surface 60-second duration warning in UI~~ ✓ DONE — Added yellow warning banner in `TrimStep.tsx` on 2026-03-19.
+## ~~Surface 60-second duration warning in UI~~ ✓ DONE — Re-added amber warning banner in `TrimStep.tsx` on 2026-03-22 (was missing from codebase despite prior TODO entry; fixed by /qa).
 
 ---
 
@@ -27,3 +27,7 @@
 ---
 
 ## ~~Screen reader announcement on clip add~~ ✓ DONE — Fixed on 2026-03-22. `aria-live="polite"` region in TrimStep announces "Clip N added" on each `onAddClip`, auto-clears after 1.5s.
+
+---
+
+## ~~Toggle buttons missing aria-label~~ ✓ DONE — Fixed on 2026-03-22 by /qa. Voiceover, Background Music, and Overlay toggles now have `aria-label`. Also added `aria-label` to all 6 volume/size sliders, `role="radio" aria-checked` to format buttons, `role="progressbar" aria-valuenow` to all progress bars.
