@@ -54,6 +54,7 @@ export default function OverlayStep({
             enabled ? 'bg-violet-600' : 'bg-zinc-700'
           }`}
           aria-pressed={enabled}
+          aria-label={enabled ? 'Overlay on' : 'Overlay off'}
         >
           <span
             className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
