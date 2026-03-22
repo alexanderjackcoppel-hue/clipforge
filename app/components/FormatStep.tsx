@@ -157,11 +157,13 @@ export default function FormatStep({
   return (
     <div className={`space-y-4 ${disabled ? 'pointer-events-none opacity-60' : ''}`}>
       {/* Format grid */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Video format">
         {FORMATS.map(f => (
           <button
             key={f.id}
             type="button"
+            role="radio"
+            aria-checked={videoFormat === f.id}
             onClick={() => onFormatChange(f.id)}
             className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all text-left ${
               videoFormat === f.id
