@@ -8,6 +8,7 @@ import downloadRouter from './routes/download.js'
 import trimRouter from './routes/trim.js'
 import transcribeRouter from './routes/transcribe.js'
 import exportRouter from './routes/export.js'
+import analyseRouter from './routes/analyse.js'
 
 export const TMP_DIR = join('/tmp', 'clipforge')
 mkdirSync(TMP_DIR, { recursive: true })
@@ -107,6 +108,7 @@ app.use('/api/download', downloadRouter)
 app.use('/api/trim', trimRouter)
 app.use('/api/transcribe', transcribeRouter)
 app.use('/api/export', exportRouter)
+app.use('/api/analyse', analyseRouter)
 
 // --- Cleanup ---
 setInterval(cleanupOldJobs, 30 * 60 * 1000)

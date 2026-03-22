@@ -1,5 +1,32 @@
 const API = '' // empty = same origin (via Next.js rewrites)
 
+export interface VideoAnalysis {
+  summary: string
+  mood: string
+  highlights: Array<{ time: number; description: string }>
+  suggestedTitle: string | null
+  suggestedDescription: string | null
+  transcript: string | null
+  frameCount: number
+}
+
+export async function analyseVideo(
+  jobId: string,
+  duration: number,
+  prompt?: string
+): Promise<VideoAnalysis> {
+  const res = await fetch(`${API}/api/analyse`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId, duration, ...(prompt && { prompt }) }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Network error' })) as { error?: string }
+    throw new Error(err.error || 'Analysis failed')
+  }
+  return res.json() as Promise<VideoAnalysis>
+}
+
 export async function downloadVideo(url: string): Promise<{ jobId: string }> {
   const res = await fetch(`${API}/api/download`, {
     method: 'POST',

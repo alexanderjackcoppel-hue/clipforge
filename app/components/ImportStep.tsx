@@ -1,15 +1,18 @@
 'use client'
 import { useState } from 'react'
+import AnalysisPanel from './AnalysisPanel'
 
 interface ImportStepProps {
   status: 'idle' | 'loading' | 'done' | 'error'
   progress: number
   error: string | null
   videoUrl: string | null
+  importJobId: string | null
+  videoDuration: number | null
   onDownload: (url: string) => void
 }
 
-export default function ImportStep({ status, progress, error, videoUrl, onDownload }: ImportStepProps) {
+export default function ImportStep({ status, progress, error, videoUrl, importJobId, videoDuration, onDownload }: ImportStepProps) {
   const [urlInput, setUrlInput] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -84,6 +87,11 @@ export default function ImportStep({ status, progress, error, videoUrl, onDownlo
               : error}
           </p>
         </div>
+      )}
+
+      {/* AI Analysis — available once video is downloaded */}
+      {status === 'done' && importJobId && videoDuration && videoDuration > 0 && (
+        <AnalysisPanel jobId={importJobId} duration={videoDuration} />
       )}
 
     </div>

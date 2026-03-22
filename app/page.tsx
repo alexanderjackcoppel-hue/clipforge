@@ -71,6 +71,7 @@ interface AppState {
   importStatus: Status
   importError: string | null
   sourceVideoUrl: string | null
+  sourceVideoDuration: number | null
 
   // Clips
   clips: Clip[]
@@ -178,6 +179,7 @@ const initialState: AppState = {
   importStatus: 'idle',
   importError: null,
   sourceVideoUrl: null,
+  sourceVideoDuration: null,
 
   clips: [],
   activeClipId: null,
@@ -257,7 +259,7 @@ export default function HomePage() {
     if (event.type === 'progress') {
       updateState({ importProgress: event.percent ?? 0, importStatus: 'loading' })
     } else if (event.type === 'done') {
-      updateState({ importStatus: 'done', importProgress: 100, sourceVideoUrl: event.url ?? null })
+      updateState({ importStatus: 'done', importProgress: 100, sourceVideoUrl: event.url ?? null, sourceVideoDuration: event.duration ?? null })
     } else if (event.type === 'error') {
       updateState({ importStatus: 'error', importError: event.message ?? 'Download failed' })
     }
@@ -366,6 +368,7 @@ export default function HomePage() {
       importProgress: 0,
       importError: null,
       sourceVideoUrl: null,
+      sourceVideoDuration: null,
       clips: [],
       activeClipId: null,
     })
@@ -694,6 +697,8 @@ export default function HomePage() {
             progress={state.importProgress}
             error={state.importError}
             videoUrl={state.sourceVideoUrl}
+            importJobId={state.importJobId}
+            videoDuration={state.sourceVideoDuration}
             onDownload={handleDownload}
           />
         </StepCard>

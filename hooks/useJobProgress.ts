@@ -7,6 +7,7 @@ export interface ProgressEvent {
   percent?: number
   message?: string
   url?: string
+  duration?: number
   subtitles?: Array<{ id: number; start: number; end: number; text: string }>
 }
 

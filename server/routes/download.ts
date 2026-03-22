@@ -66,11 +66,25 @@ router.post('/', async (req, res) => {
         },
       })
 
+      // Probe duration so the frontend can enable AI analysis
+      let duration: number | undefined
+      try {
+        const { stdout } = await spawnJob('ffprobe', [
+          '-v', 'quiet', '-print_format', 'json', '-show_streams', outputPath,
+        ])
+        const info = JSON.parse(stdout) as { streams?: Array<{ duration?: string }> }
+        const raw = parseFloat(info.streams?.[0]?.duration ?? '0')
+        if (raw > 0) duration = raw
+      } catch {
+        // ffprobe optional — analysis button won't show
+      }
+
       jobManager.sendProgress(jobId, {
         type: 'done',
         stage: 'downloaded',
         percent: 100,
         url: `/files/${jobId}/source.mp4`,
+        ...(duration !== undefined && { duration }),
       })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Download failed'
