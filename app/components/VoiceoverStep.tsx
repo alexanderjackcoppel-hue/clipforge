@@ -78,6 +78,7 @@ export default function VoiceoverStep({
               type="range" min={0} max={1} step={0.01} value={originalVolume}
               onChange={e => onOriginalVolume(parseFloat(e.target.value))}
               className="w-full"
+              aria-label="Original volume"
             />
           </div>
         )}
@@ -122,6 +123,7 @@ export default function VoiceoverStep({
                 type="range" min={0} max={1} step={0.01} value={voiceoverVolume}
                 onChange={e => onVoiceoverVolume(parseFloat(e.target.value))}
                 className="w-full"
+                aria-label="Voiceover volume"
               />
             </div>
           </div>
@@ -167,6 +169,7 @@ export default function VoiceoverStep({
                 type="range" min={0} max={1} step={0.01} value={bgMusicVolume}
                 onChange={e => onBgMusicVolume(parseFloat(e.target.value))}
                 className="w-full"
+                aria-label="Music volume"
               />
             </div>
 

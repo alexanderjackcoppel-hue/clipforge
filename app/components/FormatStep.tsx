@@ -211,6 +211,7 @@ export default function FormatStep({
               value={videoBarHeight}
               onChange={e => onVideoBarHeightChange(Number(e.target.value))}
               className="w-full"
+              aria-label="Bar height"
             />
           </div>
         </div>
@@ -228,6 +229,7 @@ export default function FormatStep({
               value={videoBarHeight}
               onChange={e => onVideoBarHeightChange(Number(e.target.value))}
               className="w-full"
+              aria-label="Bar height"
             />
           </div>
           <p className="text-[10px] text-zinc-600">Bars are filled with a blurred version of your video.</p>

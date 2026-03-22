@@ -150,6 +150,7 @@ export default function OverlayStep({
               value={overlayScale}
               onChange={e => onScaleChange(Number(e.target.value))}
               className="w-full"
+              aria-label="Overlay size"
             />
             <div className="flex justify-between text-xs text-zinc-600">
               <span>5%</span>
