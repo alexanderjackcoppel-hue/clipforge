@@ -816,11 +816,15 @@ export default function HomePage() {
     ...(state.importStatus === 'done' ? ['import'] as EditorStep[] : []),
     ...(anyTrimDone ? ['trim'] as EditorStep[] : []),
   ])
-  const lockedSteps = new Set<EditorStep>(
-    state.importStatus !== 'done'
-      ? ['trim', 'platform', 'subtitles', 'voiceover', 'overlay', 'export'] as EditorStep[]
-      : []
-  )
+  const lockedSteps = new Set<EditorStep>([
+    // Platform is always accessible — configure output format before importing
+    ...(state.importStatus !== 'done'
+      ? ['trim', 'subtitles', 'voiceover', 'overlay', 'export'] as EditorStep[]
+      : []),
+    ...((!anyTrimDone && state.importStatus === 'done')
+      ? ['subtitles', 'voiceover', 'overlay', 'export'] as EditorStep[]
+      : []),
+  ])
   const errorSteps = new Set<EditorStep>([
     ...(state.importStatus === 'error' ? ['import'] as EditorStep[] : []),
     ...(state.clips.some(c => c.trimStatus === 'error') ? ['trim'] as EditorStep[] : []),
@@ -1114,6 +1118,8 @@ export default function HomePage() {
           onPresetChange={handlePresetChange}
           onExport={handleExportAll}
           canExport={canExport}
+          displayWidth={outputWidth}
+          displayHeight={outputHeight}
         />
       )}
 

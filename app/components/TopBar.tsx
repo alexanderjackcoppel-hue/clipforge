@@ -7,6 +7,8 @@ interface TopBarProps {
   onPresetChange: (preset: PlatformPreset) => void
   onExport: () => void
   canExport: boolean
+  displayWidth?: number
+  displayHeight?: number
 }
 
 const PRESET_GROUPS = [
@@ -15,7 +17,7 @@ const PRESET_GROUPS = [
   { label: 'Other', ids: ['tiktok', 'twitter-x', 'linkedin', 'pinterest', 'custom'] },
 ]
 
-export default function TopBar({ activePreset, onPresetChange, onExport, canExport }: TopBarProps) {
+export default function TopBar({ activePreset, onPresetChange, onExport, canExport, displayWidth, displayHeight }: TopBarProps) {
   const [open, setOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -53,7 +55,7 @@ export default function TopBar({ activePreset, onPresetChange, onExport, canExpo
           className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-violet-500 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-100 transition-colors duration-150"
         >
           {activePreset.name}
-          <span className="font-mono text-xs text-zinc-400">{activePreset.aspectLabel} · {activePreset.width}×{activePreset.height}</span>
+          <span className="font-mono text-xs text-zinc-400">{activePreset.aspectLabel} · {displayWidth ?? activePreset.width}×{displayHeight ?? activePreset.height}</span>
           {activePreset.width > 1920 && (
             <span className="text-[10px] font-medium text-amber-400 bg-amber-400/10 rounded px-1 py-0.5">4K — slow encode</span>
           )}
