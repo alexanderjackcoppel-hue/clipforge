@@ -1,7 +1,5 @@
 'use client'
-import { useRef } from 'react'
-
-type OverlayPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
+import { useRef, useCallback } from 'react'
 
 interface OverlayStepProps {
   enabled: boolean
@@ -9,20 +7,19 @@ interface OverlayStepProps {
   overlayFile: File | null
   onOverlayFile: (f: File | null) => void
   previewUrl: string | null
-  overlayPosition: OverlayPosition
-  onPositionChange: (v: OverlayPosition) => void
+  overlayX: number
+  overlayY: number
+  onPositionChange: (x: number, y: number) => void
   overlayScale: number
   onScaleChange: (v: number) => void
+  overlayRotation: number
+  onRotationChange: (v: number) => void
   disabled: boolean
 }
 
-const POSITIONS: { id: OverlayPosition; row: number; col: number; label: string }[] = [
-  { id: 'top-left', row: 1, col: 1, label: 'TL' },
-  { id: 'top-right', row: 1, col: 3, label: 'TR' },
-  { id: 'center', row: 2, col: 2, label: 'C' },
-  { id: 'bottom-left', row: 3, col: 1, label: 'BL' },
-  { id: 'bottom-right', row: 3, col: 3, label: 'BR' },
-]
+// Preview canvas: 9:16 frame, 108×192 px
+const FRAME_W = 108
+const FRAME_H = 192
 
 export default function OverlayStep({
   enabled,
@@ -30,18 +27,55 @@ export default function OverlayStep({
   overlayFile,
   onOverlayFile,
   previewUrl,
-  overlayPosition,
+  overlayX,
+  overlayY,
   onPositionChange,
   overlayScale,
   onScaleChange,
+  overlayRotation,
+  onRotationChange,
   disabled,
 }: OverlayStepProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const isDragging = useRef(false)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null
     onOverlayFile(f)
   }
+
+  const getPositionFromEvent = useCallback((e: MouseEvent | React.MouseEvent): { x: number; y: number } => {
+    const canvas = canvasRef.current
+    if (!canvas) return { x: overlayX, y: overlayY }
+    const rect = canvas.getBoundingClientRect()
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }
+  }, [overlayX, overlayY])
+
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+    const { x, y } = getPositionFromEvent(e)
+    onPositionChange(x, y)
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isDragging.current) return
+      const pos = getPositionFromEvent(ev)
+      onPositionChange(pos.x, pos.y)
+    }
+    const onUp = () => {
+      isDragging.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [getPositionFromEvent, onPositionChange])
+
+  // Image size in the preview canvas (as fraction of frame width)
+  const imgPreviewW = Math.round(FRAME_W * overlayScale / 100)
 
   return (
     <div className={`space-y-4 ${disabled ? 'pointer-events-none' : ''}`}>
@@ -95,58 +129,85 @@ export default function OverlayStep({
             <p className="text-xs text-zinc-600">Supported: PNG, JPEG, WebP (max 100MB)</p>
           </div>
 
-          {/* Preview thumbnail */}
-          {previewUrl && (
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-zinc-400 uppercase tracking-wide">Preview</label>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={previewUrl}
-                alt="Overlay preview"
-                className="max-h-24 rounded-lg object-contain border border-zinc-700"
-              />
-            </div>
-          )}
-
-          {/* Position picker */}
+          {/* Draggable position canvas */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-zinc-400">Position</label>
-            <div
-              className="grid gap-1.5"
-              style={{ gridTemplateColumns: 'repeat(3, 2.5rem)', gridTemplateRows: 'repeat(3, 2.5rem)' }}
-              role="group"
-              aria-label="Overlay position"
-            >
-              {POSITIONS.map(p => (
+            <div className="flex items-start gap-4">
+              {/* 9:16 canvas */}
+              <div
+                ref={canvasRef}
+                onMouseDown={handleCanvasMouseDown}
+                className="relative flex-shrink-0 rounded-lg overflow-hidden border border-zinc-700 cursor-crosshair select-none"
+                style={{ width: FRAME_W, height: FRAME_H, background: '#18181b' }}
+                title="Click or drag to position the overlay"
+              >
+                {/* Grid lines hint */}
+                <div className="absolute inset-0 opacity-10" style={{
+                  backgroundImage: 'linear-gradient(#6d28d9 1px, transparent 1px), linear-gradient(90deg, #6d28d9 1px, transparent 1px)',
+                  backgroundSize: `${FRAME_W/3}px ${FRAME_H/3}px`,
+                }} />
+
+                {/* Overlay image positioned at overlayX%, overlayY% */}
+                {previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previewUrl}
+                    alt="Overlay"
+                    draggable={false}
+                    style={{
+                      position: 'absolute',
+                      width: imgPreviewW,
+                      height: 'auto',
+                      left: `${overlayX}%`,
+                      top: `${overlayY}%`,
+                      transform: `translate(-50%, -50%) rotate(${overlayRotation}deg)`,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                ) : (
+                  /* Placeholder dot */
+                  <div
+                    style={{
+                      position: 'absolute',
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: '#7c3aed',
+                      left: `${overlayX}%`,
+                      top: `${overlayY}%`,
+                      transform: 'translate(-50%, -50%)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )}
+              </div>
+
+              <div className="flex-1 space-y-1 pt-1">
+                <p className="text-xs text-zinc-500">Click or drag to place</p>
+                <p className="text-xs font-mono text-zinc-500">
+                  X {overlayX.toFixed(0)}% · Y {overlayY.toFixed(0)}%
+                </p>
                 <button
-                  key={p.id}
                   type="button"
-                  onClick={() => onPositionChange(p.id)}
-                  title={p.id.replace('-', ' ')}
-                  style={{ gridRow: p.row, gridColumn: p.col }}
-                  className={`w-10 h-10 rounded-lg text-xs font-bold transition-colors duration-150 ${
-                    overlayPosition === p.id
-                      ? 'bg-violet-600 text-white'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                  }`}
+                  onClick={() => onPositionChange(50, 50)}
+                  className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors mt-1"
                 >
-                  {p.label}
+                  Reset to center
                 </button>
-              ))}
+              </div>
             </div>
-            <p className="text-xs text-zinc-600 capitalize">{overlayPosition.replace('-', ' ')}</p>
           </div>
 
           {/* Size slider */}
           <div className="space-y-1.5">
             <div className="flex justify-between text-sm text-zinc-300">
               <label>Size</label>
-              <span className="text-zinc-400">{overlayScale}% of frame width</span>
+              <span className="text-zinc-400">{overlayScale}%</span>
             </div>
             <input
               type="range"
               min={5}
-              max={50}
+              max={100}
               value={overlayScale}
               onChange={e => onScaleChange(Number(e.target.value))}
               className="w-full"
@@ -154,7 +215,28 @@ export default function OverlayStep({
             />
             <div className="flex justify-between text-xs text-zinc-600">
               <span>5%</span>
-              <span>50%</span>
+              <span>100%</span>
+            </div>
+          </div>
+
+          {/* Rotation slider */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-sm text-zinc-300">
+              <label>Rotation</label>
+              <span className="text-zinc-400">{overlayRotation}°</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={359}
+              value={overlayRotation}
+              onChange={e => onRotationChange(Number(e.target.value))}
+              className="w-full"
+              aria-label="Overlay rotation"
+            />
+            <div className="flex justify-between text-xs text-zinc-600">
+              <span>0°</span>
+              <span>359°</span>
             </div>
           </div>
         </div>

@@ -5,6 +5,9 @@ export type VideoFormat = 'standard' | 'social-post' | 'cinematic' | 'blur-bg'
 interface FormatStepProps {
   videoFormat: VideoFormat
   onFormatChange: (f: VideoFormat) => void
+  // Regular (standard)
+  standardBgColor: string
+  onStandardBgColorChange: (c: string) => void
   // Social post
   socialBgColor: string
   onSocialBgColorChange: (c: string) => void
@@ -27,13 +30,14 @@ interface FormatDef {
 const FORMATS: FormatDef[] = [
   {
     id: 'standard',
-    label: 'Full Bleed',
-    description: 'Video fills the entire 9:16 frame',
+    label: 'Regular',
+    description: 'Fit within 9:16 — colored bars fill any empty space',
     icon: (
       <svg viewBox="0 0 36 64" className="w-9 h-16" fill="none">
         <rect x="0" y="0" width="36" height="64" rx="4" fill="#27272a" />
-        <rect x="1" y="1" width="34" height="62" rx="3" fill="#6d28d9" opacity="0.7" />
-        <path d="M13 24l13 8-13 8z" fill="white" opacity="0.5" />
+        <rect x="1" y="1" width="34" height="62" rx="3" fill="#09090b" />
+        <rect x="1" y="19" width="34" height="26" fill="#6d28d9" opacity="0.7" />
+        <path d="M14 30l10 3-10 3z" fill="white" opacity="0.5" />
       </svg>
     ),
   },
@@ -147,8 +151,20 @@ function ColorPicker({
   )
 }
 
+const PRESET_STANDARD_COLORS = [
+  { label: 'Black',  value: '000000' },
+  { label: 'White',  value: 'FFFFFF' },
+  { label: 'Slate',  value: '1E293B' },
+  { label: 'Navy',   value: '0F172A' },
+  { label: 'Sand',   value: 'E8D5B0' },
+  { label: 'Cream',  value: 'FFF8DC' },
+  { label: 'Blush',  value: 'FFD6E0' },
+  { label: 'Forest', value: '14532D' },
+]
+
 export default function FormatStep({
   videoFormat, onFormatChange,
+  standardBgColor, onStandardBgColorChange,
   socialBgColor, onSocialBgColorChange,
   cinematicBgColor, onCinematicBgColorChange,
   videoBarHeight, onVideoBarHeightChange,
@@ -237,8 +253,14 @@ export default function FormatStep({
       )}
 
       {videoFormat === 'standard' && (
-        <div className="bg-zinc-900 rounded-xl p-3 border border-zinc-800">
-          <p className="text-xs text-zinc-500">Video fills the entire 9:16 frame. No bars or background.</p>
+        <div className="space-y-3 bg-zinc-900 rounded-xl p-3 border border-zinc-800">
+          <ColorPicker
+            presets={PRESET_STANDARD_COLORS}
+            value={standardBgColor}
+            onChange={onStandardBgColorChange}
+            label="Bar Color"
+          />
+          <p className="text-[10px] text-zinc-600">Bars appear on any side that doesn't fill the 9:16 frame.</p>
         </div>
       )}
     </div>
