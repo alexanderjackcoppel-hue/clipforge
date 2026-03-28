@@ -1,5 +1,6 @@
 'use client'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
+import { generateVoiceover } from '../../lib/api'
 
 interface VoiceoverStepProps {
   enabled: boolean
@@ -42,6 +43,8 @@ function Toggle({ on, onToggle, label }: { on: boolean; onToggle: () => void; la
   )
 }
 
+const TTS_VOICES = ['Samantha', 'Alex', 'Victoria', 'Karen', 'Moira', 'Daniel', 'Rishi', 'Tessa']
+
 export default function VoiceoverStep({
   enabled, onToggle, voiceoverFile, onVoiceoverFile,
   originalVolume, onOriginalVolume, voiceoverVolume, onVoiceoverVolume,
@@ -53,6 +56,29 @@ export default function VoiceoverStep({
 }: VoiceoverStepProps) {
   const voiceInputRef = useRef<HTMLInputElement>(null)
   const musicInputRef = useRef<HTMLInputElement>(null)
+  const [ttsScript, setTtsScript] = useState('')
+  const [ttsVoice, setTtsVoice] = useState('Samantha')
+  const [ttsStatus, setTtsStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [ttsError, setTtsError] = useState<string | null>(null)
+
+  const handleGenerate = async () => {
+    if (!ttsScript.trim()) return
+    setTtsStatus('loading')
+    setTtsError(null)
+    try {
+      const { url } = await generateVoiceover(ttsScript, ttsVoice)
+      const resp = await fetch(url)
+      if (!resp.ok) throw new Error('Failed to fetch generated audio')
+      const blob = await resp.blob()
+      const file = new File([blob], 'voiceover.wav', { type: 'audio/wav' })
+      onVoiceoverFile(file)
+      if (!enabled) onToggle(true)
+      setTtsStatus('done')
+    } catch (err) {
+      setTtsError(err instanceof Error ? err.message : 'Generation failed')
+      setTtsStatus('error')
+    }
+  }
 
   return (
     <div className={`space-y-5 ${disabled ? 'pointer-events-none' : ''}`}>
@@ -92,8 +118,58 @@ export default function VoiceoverStep({
 
         {enabled && (
           <div className="space-y-4">
+            {/* ── Generate from script ── */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-400">Audio File</label>
+              <label className="text-sm font-medium text-zinc-400">Generate from Script</label>
+              <textarea
+                value={ttsScript}
+                onChange={e => setTtsScript(e.target.value)}
+                placeholder="Type your voiceover script here…"
+                rows={3}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm resize-none"
+              />
+              <div className="flex items-center gap-2">
+                <select
+                  value={ttsVoice}
+                  onChange={e => setTtsVoice(e.target.value)}
+                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                >
+                  {TTS_VOICES.map(v => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={!ttsScript.trim() || ttsStatus === 'loading'}
+                  className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+                >
+                  {ttsStatus === 'loading' ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      Generating…
+                    </>
+                  ) : 'Generate Voiceover'}
+                </button>
+              </div>
+              {ttsStatus === 'done' && (
+                <p className="text-xs text-emerald-400">✓ Voiceover generated and applied</p>
+              )}
+              {ttsStatus === 'error' && (
+                <p className="text-xs text-red-400">{ttsError}</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 text-zinc-600">
+              <div className="flex-1 h-px bg-zinc-800" />
+              <span className="text-xs">or upload a file</span>
+              <div className="flex-1 h-px bg-zinc-800" />
+            </div>
+
+            <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
