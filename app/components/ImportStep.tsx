@@ -10,9 +10,10 @@ interface ImportStepProps {
   importJobId: string | null
   videoDuration: number | null
   onDownload: (url: string) => void
+  onUseAnalysisText?: (text: string) => void
 }
 
-export default function ImportStep({ status, progress, error, videoUrl, importJobId, videoDuration, onDownload }: ImportStepProps) {
+export default function ImportStep({ status, progress, error, videoUrl, importJobId, videoDuration, onDownload, onUseAnalysisText }: ImportStepProps) {
   const [urlInput, setUrlInput] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -91,7 +92,7 @@ export default function ImportStep({ status, progress, error, videoUrl, importJo
 
       {/* AI Analysis — available once video is downloaded */}
       {status === 'done' && importJobId && videoDuration && videoDuration > 0 && (
-        <AnalysisPanel jobId={importJobId} duration={videoDuration} />
+        <AnalysisPanel jobId={importJobId} duration={videoDuration} onUseText={onUseAnalysisText} />
       )}
 
     </div>

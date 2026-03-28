@@ -9,7 +9,6 @@ interface TrimStepProps {
   onAddClip: (startSecs: number, endSecs: number) => void
   onRemoveClip: (clipId: string) => void
   onTrimClip: (clipId: string) => void
-  onTrimAll: () => void
   onUpdateClipLabel: (clipId: string, label: string) => void
   onUpdateClipCrop: (clipId: string, crop: CropRect) => void
   onToggleClipFade: (clipId: string, field: 'fadeIn' | 'fadeOut', value: boolean) => void
@@ -53,7 +52,6 @@ export default function TrimStep({
   onAddClip,
   onRemoveClip,
   onTrimClip,
-  onTrimAll,
   onUpdateClipLabel,
   onUpdateClipCrop,
   onToggleClipFade,
@@ -281,8 +279,6 @@ export default function TrimStep({
     if (videoRef.current) videoRef.current.currentTime = secs
   }
 
-  const idleOrErrorClips = clips.filter(c => c.trimStatus === 'idle' || c.trimStatus === 'error')
-
   const openCropEditor = (clip: Clip) => {
     onStartCropEdit(clip.id)
   }
@@ -441,18 +437,7 @@ export default function TrimStep({
       {/* Clip list */}
       {clips.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-zinc-300">Clips ({clips.length})</h3>
-            {idleOrErrorClips.length > 1 && (
-              <button
-                type="button"
-                onClick={onTrimAll}
-                className="text-xs bg-violet-600 hover:bg-violet-500 text-white font-medium rounded px-3 py-1.5 transition-colors"
-              >
-                Trim All
-              </button>
-            )}
-          </div>
+          <h3 className="text-sm font-medium text-zinc-300">Clips ({clips.length})</h3>
 
           {/* aria-live region for screen reader announcements */}
           <div aria-live="polite" aria-atomic="true" className="sr-only">
@@ -477,8 +462,6 @@ export default function TrimStep({
                     e.preventDefault()
                     const prev = clipRowRefs.current[idx - 1]
                     if (prev) prev.focus()
-                  } else if (e.key === 'Enter' && clip.trimStatus === 'idle') {
-                    onTrimClip(clip.id)
                   } else if ((e.key === 'Delete' || e.key === 'Backspace') && !editingLabelId) {
                     onRemoveClip(clip.id)
                   }
@@ -555,15 +538,17 @@ export default function TrimStep({
                       <span className="text-xs text-zinc-400">{clip.trimProgress}%</span>
                     </div>
                   ) : clip.trimStatus === 'done' ? (
-                    <span className="text-xs text-emerald-400 font-medium">Trimmed ✓</span>
-                  ) : (
+                    <span className="text-xs text-emerald-400 font-medium">✓</span>
+                  ) : clip.trimStatus === 'error' ? (
                     <button
                       type="button"
                       onClick={() => onTrimClip(clip.id)}
-                      className="text-xs bg-violet-600 hover:bg-violet-500 text-white font-medium rounded px-3 py-1.5 transition-colors"
+                      className="text-xs bg-red-800/60 hover:bg-red-700/60 border border-red-700/60 text-red-300 font-medium rounded px-2.5 py-1.5 transition-colors"
                     >
-                      Trim
+                      Retry
                     </button>
+                  ) : (
+                    <span className="text-xs text-zinc-500">Queued…</span>
                   )}
 
                   {/* Delete */}
