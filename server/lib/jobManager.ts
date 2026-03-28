@@ -69,9 +69,13 @@ class JobManager {
     const payload = `data: ${JSON.stringify(event)}\n\n`
     const deadClients: Response[] = []
 
+    const isFinal = event.type === 'done' || event.type === 'error'
     for (const res of clientList) {
       try {
         res.write(payload)
+        // Close the SSE connection after the final event so HTTP proxies
+        // (e.g. Next.js dev proxy) flush their buffers immediately.
+        if (isFinal) res.end()
       } catch {
         deadClients.push(res)
       }
@@ -85,19 +89,21 @@ class JobManager {
 
   connectSSE(jobId: string, res: Response): void {
     const job = this.jobs.get(jobId)
+    const isTerminal = job && (job.status === 'done' || job.status === 'error')
 
-    // Register client and cleanup handler before replaying events so that
-    // res.on('close') is always wired up regardless of job state.
-    const clientList = this.clients.get(jobId) ?? []
-    clientList.push(res)
-    this.clients.set(jobId, clientList)
-    res.on('close', () => {
-      const list = this.clients.get(jobId) ?? []
-      this.clients.set(jobId, list.filter(r => r !== res))
-    })
+    if (!isTerminal) {
+      // Job still running — register client for future events
+      const clientList = this.clients.get(jobId) ?? []
+      clientList.push(res)
+      this.clients.set(jobId, clientList)
+      res.on('close', () => {
+        const list = this.clients.get(jobId) ?? []
+        this.clients.set(jobId, list.filter(r => r !== res))
+      })
+    }
 
     // Replay buffered events (catches fast-completing jobs where the SSE
-    // client connects after the job is already done)
+    // client connects after the job is already done, or reconnects after close)
     if (job) {
       for (const event of job.events) {
         try {
@@ -106,14 +112,14 @@ class JobManager {
           return
         }
       }
+      // For terminal jobs: close the connection so the Next.js dev proxy
+      // flushes its buffer and the EventSource receives the done/error event.
+      // The headers + heartbeat were already written before connectSSE was
+      // called, so the proxy already knows this is an SSE stream.
+      if (isTerminal) {
+        try { res.end() } catch { /* ignore */ }
+      }
     }
-
-    // Do NOT call res.end() here — even for already-terminal jobs.
-    // Calling res.end() immediately causes Next.js dev proxy to treat this as
-    // a buffered HTTP response rather than an SSE stream, dropping events for
-    // fast-completing jobs (e.g. short YouTube Shorts).
-    // The SSE hook closes the EventSource on receiving done/error, which
-    // triggers res.on('close') above to remove the client from the list.
   }
 
   enqueue(fn: JobFn): Promise<void> {
