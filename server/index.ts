@@ -9,6 +9,8 @@ import trimRouter from './routes/trim.js'
 import transcribeRouter from './routes/transcribe.js'
 import exportRouter from './routes/export.js'
 import analyseRouter from './routes/analyse.js'
+import thumbnailRouter from './routes/thumbnail.js'
+import ttsRouter from './routes/tts.js'
 
 export const TMP_DIR = join('/tmp', 'clipforge')
 mkdirSync(TMP_DIR, { recursive: true })
@@ -47,7 +49,8 @@ app.use(express.json())
 // Allow the Next.js dev server (localhost:3000) to load media directly from this server
 app.use((_req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   next()
 })
 
@@ -109,6 +112,8 @@ app.use('/api/trim', trimRouter)
 app.use('/api/transcribe', transcribeRouter)
 app.use('/api/export', exportRouter)
 app.use('/api/analyse', analyseRouter)
+app.use('/api/thumbnail', thumbnailRouter)
+app.use('/api/tts', ttsRouter)
 
 // --- Cleanup ---
 setInterval(cleanupOldJobs, 30 * 60 * 1000)
