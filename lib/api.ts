@@ -3,11 +3,30 @@ const API = '' // empty = same origin (via Next.js rewrites)
 export interface VideoAnalysis {
   summary: string
   mood: string
+  funnyText: string | null
+  caption: string | null
+  hashtags: string[]
   highlights: Array<{ time: number; description: string }>
   suggestedTitle: string | null
   suggestedDescription: string | null
   transcript: string | null
   frameCount: number
+}
+
+export async function generateVoiceover(
+  text: string,
+  voice?: string
+): Promise<{ url: string }> {
+  const res = await fetch(`${API}/api/tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, voice }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Network error' })) as { error?: string }
+    throw new Error(err.error || 'TTS failed')
+  }
+  return res.json() as Promise<{ url: string }>
 }
 
 export async function analyseVideo(
@@ -82,6 +101,7 @@ export interface SubtitleStylePayload {
   fontFamily: string
   bold: boolean
   outlineWidth: number
+  textAlign?: 'center' | 'left'
 }
 
 export interface ExportParams {
@@ -102,8 +122,10 @@ export interface ExportParams {
   bgMusicFadeOut?: boolean
   overlayEnabled: boolean
   overlayFile?: File
-  overlayPosition: string
+  overlayX: number
+  overlayY: number
   overlayScale: number
+  overlayRotation: number
   videoFormat?: 'standard' | 'social-post' | 'cinematic' | 'blur-bg'
   socialBgColor?: string
   socialVideoScale?: number
@@ -118,6 +140,35 @@ export interface ExportParams {
   zoomEnabled?: boolean
   zoomX?: number
   zoomY?: number
+  custom2TextSubtitles?: Array<{ id: number; start: number; end: number; text: string }>
+  custom2TextSubtitleStyle?: SubtitleStylePayload
+  emojiStickers?: Array<{ id: string; emoji: string; x: number; y: number; size: number }>
+  standardBgColor?: string
+  presetWidth?: number
+  presetHeight?: number
+}
+
+async function renderEmojiCanvas(
+  stickers: Array<{ emoji: string; x: number; y: number; size: number }>,
+  width = 1080,
+  height = 1920,
+): Promise<Blob | null> {
+  return new Promise(resolve => {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) { resolve(null); return }
+    ctx.clearRect(0, 0, width, height)
+    for (const s of stickers) {
+      const fontSize = Math.max(8, Math.round(s.size * width / 100))
+      ctx.font = `${fontSize}px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif`
+      ctx.textBaseline = 'middle'
+      ctx.textAlign = 'center'
+      ctx.fillText(s.emoji, s.x * width / 100, s.y * height / 100)
+    }
+    canvas.toBlob(blob => resolve(blob), 'image/png')
+  })
 }
 
 export async function exportVideo(params: ExportParams): Promise<{ jobId: string }> {
@@ -127,6 +178,8 @@ export async function exportVideo(params: ExportParams): Promise<{ jobId: string
   if (params.subtitleStyle) form.append('subtitleStyle', JSON.stringify(params.subtitleStyle))
   if (params.customTextSubtitles) form.append('customTextSubtitles', JSON.stringify(params.customTextSubtitles))
   if (params.customTextSubtitleStyle) form.append('customTextSubtitleStyle', JSON.stringify(params.customTextSubtitleStyle))
+  if (params.custom2TextSubtitles) form.append('custom2TextSubtitles', JSON.stringify(params.custom2TextSubtitles))
+  if (params.custom2TextSubtitleStyle) form.append('custom2TextSubtitleStyle', JSON.stringify(params.custom2TextSubtitleStyle))
   form.append('voiceoverEnabled', String(params.voiceoverEnabled))
   if (params.voiceoverEnabled && params.voiceoverFile) form.append('voiceover', params.voiceoverFile)
   form.append('bgMusicEnabled', String(!!params.bgMusicEnabled))
@@ -136,11 +189,14 @@ export async function exportVideo(params: ExportParams): Promise<{ jobId: string
   if (params.bgMusicFadeOut) form.append('bgMusicFadeOut', 'true')
   form.append('overlayEnabled', String(params.overlayEnabled))
   if (params.overlayEnabled && params.overlayFile) form.append('overlay', params.overlayFile)
+  form.append('overlayX', String(params.overlayX))
+  form.append('overlayY', String(params.overlayY))
+  form.append('overlayRotation', String(params.overlayRotation))
   form.append('originalVolume', String(params.originalVolume))
   form.append('voiceoverVolume', String(params.voiceoverVolume))
-  form.append('overlayPosition', params.overlayPosition)
   form.append('overlayScale', String(params.overlayScale))
   if (params.videoFormat) form.append('videoFormat', params.videoFormat)
+  if (params.standardBgColor) form.append('standardBgColor', params.standardBgColor)
   if (params.socialBgColor) form.append('socialBgColor', params.socialBgColor)
   if (params.socialVideoScale !== undefined) form.append('socialVideoScale', String(params.socialVideoScale))
   if (params.videoOffsetX !== undefined) form.append('videoOffsetX', String(params.videoOffsetX))
@@ -153,6 +209,14 @@ export async function exportVideo(params: ExportParams): Promise<{ jobId: string
   if (params.zoomEnabled) form.append('zoomEnabled', 'true')
   if (params.zoomX !== undefined) form.append('zoomX', String(params.zoomX))
   if (params.zoomY !== undefined) form.append('zoomY', String(params.zoomY))
+
+  if (params.presetWidth) form.append('presetWidth', String(params.presetWidth))
+  if (params.presetHeight) form.append('presetHeight', String(params.presetHeight))
+
+  if (params.emojiStickers && params.emojiStickers.length > 0) {
+    const blob = await renderEmojiCanvas(params.emojiStickers, params.presetWidth ?? 1080, params.presetHeight ?? 1920)
+    if (blob) form.append('emojiOverlay', blob, 'emoji-overlay.png')
+  }
 
   const queryParams = new URLSearchParams({ jobId: params.jobId })
   if (params.clipSuffix) queryParams.set('clipSuffix', params.clipSuffix)

@@ -11,6 +11,7 @@ interface SubtitleLayerStyle {
   fontFamily: string
   bold: boolean
   outlineWidth: number
+  textAlign?: 'center' | 'left'
 }
 
 interface PreviewPanelProps {
@@ -23,12 +24,24 @@ interface PreviewPanelProps {
   customLines: { id: number; start: number; end: number; text: string }[]
   customStyle: SubtitleLayerStyle
   onCustomPositionChange: (pos: Pos) => void
-  activeLayer: 'auto' | 'custom'
+  activeLayer: 'auto' | 'custom' | 'custom2' | 'emoji'
+  // Text 2 layer
+  custom2Enabled: boolean
+  custom2Lines: { id: number; start: number; end: number; text: string }[]
+  custom2Style: SubtitleLayerStyle
+  onCustom2PositionChange: (pos: Pos) => void
+  // Emoji stickers
+  emojiStickers: { id: string; emoji: string; x: number; y: number; size: number }[]
+  onEmojiMove: (id: string, x: number, y: number) => void
   overlayEnabled: boolean
   overlayPreviewUrl: string | null
-  overlayPosition: string
+  overlayX: number
+  overlayY: number
+  overlayRotation: number
   overlayScale: number
+  onOverlayMove: (x: number, y: number) => void
   videoFormat: 'standard' | 'social-post' | 'cinematic' | 'blur-bg'
+  standardBgColor: string
   socialBgColor: string
   socialVideoScale: number
   onSocialVideoScaleChange: (v: number) => void
@@ -48,18 +61,18 @@ interface PreviewPanelProps {
   // Zoom point selection
   zoomSelectClipId: string | null
   onZoomPointSet: (x: number, y: number) => void
+  // Output dimensions (for correct aspect ratio preview)
+  presetWidth: number
+  presetHeight: number
 }
 
-function overlayCSS(pos: string, scale: number): React.CSSProperties {
-  const w = `${scale}%`
-  const gap = '1.5%'
-  switch (pos) {
-    case 'top-left':     return { position: 'absolute', top: gap, left: gap, width: w }
-    case 'top-right':    return { position: 'absolute', top: gap, right: gap, width: w }
-    case 'bottom-left':  return { position: 'absolute', bottom: gap, left: gap, width: w }
-    case 'bottom-right': return { position: 'absolute', bottom: gap, right: gap, width: w }
-    case 'center':       return { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: w }
-    default:             return { position: 'absolute', bottom: gap, right: gap, width: w }
+function overlayCSS(x: number, y: number, rotation: number, scale: number): React.CSSProperties {
+  return {
+    position: 'absolute',
+    left: `${x}%`,
+    top: `${y}%`,
+    width: `${scale}%`,
+    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
   }
 }
 
@@ -71,25 +84,39 @@ function fmtTime(s: number): string {
 
 function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
 
+const SNAP_X_GUIDES = [50]
+const SNAP_Y_GUIDES = [25, 50, 75]
+const SNAP_THRESHOLD = 4
+
+function applySnap(x: number, y: number): { x: number; y: number; hx: number | null; hy: number | null } {
+  let hx: number | null = null
+  let hy: number | null = null
+  for (const g of SNAP_X_GUIDES) { if (Math.abs(x - g) < SNAP_THRESHOLD) { x = g; hx = g; break } }
+  for (const g of SNAP_Y_GUIDES) { if (Math.abs(y - g) < SNAP_THRESHOLD) { y = g; hy = g; break } }
+  return { x, y, hx, hy }
+}
+
 export default function PreviewPanel({
   videoUrl,
   autoEnabled, autoLines, autoStyle, onAutoPositionChange,
   customEnabled, customLines, customStyle, onCustomPositionChange,
   activeLayer,
-  overlayEnabled, overlayPreviewUrl, overlayPosition, overlayScale,
-  videoFormat, socialBgColor, socialVideoScale, onSocialVideoScaleChange,
+  custom2Enabled, custom2Lines, custom2Style, onCustom2PositionChange,
+  emojiStickers, onEmojiMove,
+  overlayEnabled, overlayPreviewUrl, overlayX, overlayY, overlayRotation, overlayScale, onOverlayMove,
+  videoFormat, standardBgColor, socialBgColor, socialVideoScale, onSocialVideoScaleChange,
   cinematicBgColor, videoBarHeight,
   videoOffsetX, videoOffsetY, onVideoOffsetChange,
   sourceVideoUrl, sourceVideoAR,
   cropEditClipId, activeCropRect, onCropChange, onCropDone, onCropCancel,
   zoomSelectClipId, onZoomPointSet,
+  presetWidth, presetHeight,
 }: PreviewPanelProps) {
   const containerRef     = useRef<HTMLDivElement>(null)
   const videoRef         = useRef<HTMLVideoElement>(null)
 
   // Crop editor refs
   const cropContainerRef = useRef<HTMLDivElement>(null)
-  const cropVideoRef     = useRef<HTMLVideoElement>(null)
   const cropDragModeRef  = useRef<'idle' | 'drawing' | 'moving' | 'tl' | 'tr' | 'bl' | 'br'>('idle')
   const cropDragStartRef = useRef<{ mx: number; my: number; initCrop: CropRect } | null>(null)
   const activeCropRectRef = useRef(activeCropRect)
@@ -100,23 +127,51 @@ export default function PreviewPanel({
   // Tracks main video time persistently (survives conditional unmount in crop mode)
   const lastMainVideoTimeRef = useRef(0)
 
-  // Reset error state when entering crop mode
+  // Thumbnail for crop editor — direct img src, no blob URLs
+  const cropJobId = sourceVideoUrl?.match(/^\/files\/([^/]+)\//)?.[1] ?? null
+  const thumbnailSrc = cropEditClipId && cropJobId
+    ? `/api/thumbnail?jobId=${encodeURIComponent(cropJobId)}`
+    : null
+
+  const [thumbLoaded, setThumbLoaded] = useState(false)
+  const [thumbError, setThumbError] = useState(false)
+  const [thumbnailNaturalSize, setThumbnailNaturalSize] = useState<{ w: number; h: number } | null>(null)
+
+  // Reset load states whenever the thumbnail source changes
   useEffect(() => {
-    if (cropEditClipId) {
-      setCropVideoError(false)
-    }
-  }, [cropEditClipId])
+    setThumbLoaded(false)
+    setThumbError(false)
+    setThumbnailNaturalSize(null)
+  }, [thumbnailSrc])
 
   // Playback state
   const [isPlaying, setIsPlaying]   = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration]     = useState(0)
-  const [cropVideoError, setCropVideoError] = useState(false)
 
   // Subtitle drag
   const isDraggingRef   = useRef(false)
   const rafRef          = useRef<number | null>(null)
-  const lastPosRef      = useRef<{ pos: Pos; layer: 'auto' | 'custom' } | null>(null)
+  const lastPosRef      = useRef<{ pos: Pos; layer: 'auto' | 'custom' | 'custom2' | 'emoji' } | null>(null)
+
+  // Emoji drag refs
+  const emojiDragIdRef    = useRef<string | null>(null)
+  const emojiRafRef       = useRef<number | null>(null)
+  const lastEmojiPosRef   = useRef<{ x: number; y: number } | null>(null)
+  const emojiDragStartRef = useRef<{ mx: number; my: number; initX: number; initY: number } | null>(null)
+
+  // Overlay drag
+  const overlayImgRef       = useRef<HTMLImageElement>(null)
+  const overlayDragRef      = useRef(false)
+  const overlayDragStartRef = useRef<{ mx: number; my: number; initX: number; initY: number } | null>(null)
+  const lastOverlayPosRef   = useRef<{ x: number; y: number } | null>(null)
+  const overlayRafRef       = useRef<number | null>(null)
+
+  // Snap guide lines
+  const snapVLineRef    = useRef<HTMLDivElement>(null)
+  const snapHLineRef    = useRef<HTMLDivElement>(null)
+  const snapH25LineRef  = useRef<HTMLDivElement>(null)
+  const snapH75LineRef  = useRef<HTMLDivElement>(null)
 
   // Video drag (social-post only)
   const isVideoMovingRef    = useRef(false)
@@ -144,6 +199,13 @@ export default function PreviewPanel({
     c.style.setProperty('--custom-x', `${customStyle.position.x}%`)
     c.style.setProperty('--custom-y', `${customStyle.position.y}%`)
   }, [customStyle.position.x, customStyle.position.y])
+
+  useEffect(() => {
+    const c = containerRef.current
+    if (!c) return
+    c.style.setProperty('--custom2-x', `${custom2Style.position.x}%`)
+    c.style.setProperty('--custom2-y', `${custom2Style.position.y}%`)
+  }, [custom2Style.position.x, custom2Style.position.y])
 
   // ── Sync video offset + scale CSS vars ──
   useEffect(() => {
@@ -210,12 +272,30 @@ export default function PreviewPanel({
     }
   }, [])
 
-  const setCSSSubPos = useCallback((pos: Pos, layer: 'auto' | 'custom') => {
+  const setCSSSubPos = useCallback((pos: Pos, layer: 'auto' | 'custom' | 'custom2' | 'emoji') => {
     const c = containerRef.current
     if (!c) return
-    c.style.setProperty(layer === 'auto' ? '--auto-x' : '--custom-x', `${pos.x}%`)
-    c.style.setProperty(layer === 'auto' ? '--auto-y' : '--custom-y', `${pos.y}%`)
+    if (layer === 'auto') { c.style.setProperty('--auto-x', `${pos.x}%`); c.style.setProperty('--auto-y', `${pos.y}%`) }
+    else if (layer === 'custom') { c.style.setProperty('--custom-x', `${pos.x}%`); c.style.setProperty('--custom-y', `${pos.y}%`) }
+    else if (layer === 'custom2') { c.style.setProperty('--custom2-x', `${pos.x}%`); c.style.setProperty('--custom2-y', `${pos.y}%`) }
   }, [])
+
+  // ── Snap guide line helpers ──
+  const updateSnapLines = useCallback((hx: number | null, hy: number | null) => {
+    if (snapVLineRef.current)   snapVLineRef.current.style.display   = hx === 50 ? 'block' : 'none'
+    if (snapHLineRef.current)   snapHLineRef.current.style.display   = hy === 50 ? 'block' : 'none'
+    if (snapH25LineRef.current) snapH25LineRef.current.style.display = hy === 25 ? 'block' : 'none'
+    if (snapH75LineRef.current) snapH75LineRef.current.style.display = hy === 75 ? 'block' : 'none'
+  }, [])
+  const clearSnapLines = useCallback(() => { updateSnapLines(null, null) }, [updateSnapLines])
+
+  // ── Overlay drag start ──
+  const handleOverlayDragStart = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
+    e.stopPropagation()
+    e.preventDefault()
+    overlayDragRef.current = true
+    overlayDragStartRef.current = { mx: e.clientX, my: e.clientY, initX: overlayX, initY: overlayY }
+  }, [overlayX, overlayY])
 
   // ── Thumbnail capture ──
   const captureFrame = useCallback(() => {
@@ -236,6 +316,14 @@ export default function PreviewPanel({
     }, 'image/jpeg', 0.92)
   }, [])
 
+  // ── Emoji drag start ──
+  const handleEmojiDragStart = (e: React.MouseEvent, id: string, initX: number, initY: number) => {
+    e.stopPropagation()
+    e.preventDefault()
+    emojiDragIdRef.current = id
+    emojiDragStartRef.current = { mx: e.clientX, my: e.clientY, initX, initY }
+  }
+
   // ── Container mousedown → zoom-select or subtitle drag ──
   const handleMouseDown = (e: React.MouseEvent) => {
     if (isVideoMovingRef.current || isResizingRef.current) return
@@ -249,12 +337,18 @@ export default function PreviewPanel({
       onZoomPointSet(x, y)
       return
     }
+    if (activeLayer === 'emoji') return
     e.preventDefault()
     isDraggingRef.current = true
-    const pos = getPosFromEvent(e)
-    if (!pos) return
+    const raw = getPosFromEvent(e)
+    if (!raw) return
+    const { x, y, hx, hy } = applySnap(raw.x, raw.y)
+    const pos = { x, y }
+    updateSnapLines(hx, hy)
     setCSSSubPos(pos, activeLayer)
-    activeLayer === 'auto' ? onAutoPositionChange(pos) : onCustomPositionChange(pos)
+    if (activeLayer === 'auto') onAutoPositionChange(pos)
+    else if (activeLayer === 'custom') onCustomPositionChange(pos)
+    else if (activeLayer === 'custom2') onCustom2PositionChange(pos)
   }
 
   // ── Video drag start (social-post) ──
@@ -305,6 +399,60 @@ export default function PreviewPanel({
   // ── Global mouse events ──
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
+      // Overlay drag
+      if (overlayDragRef.current) {
+        const start = overlayDragStartRef.current
+        if (!start || !containerRef.current) return
+        const rect = containerRef.current.getBoundingClientRect()
+        const dxPct = ((e.clientX - start.mx) / rect.width) * 100
+        const dyPct = ((e.clientY - start.my) / rect.height) * 100
+        const rawX = Math.max(0, Math.min(100, start.initX + dxPct))
+        const rawY = Math.max(0, Math.min(100, start.initY + dyPct))
+        const { x: newX, y: newY, hx, hy } = applySnap(rawX, rawY)
+        updateSnapLines(hx, hy)
+        lastOverlayPosRef.current = { x: newX, y: newY }
+        if (overlayImgRef.current) {
+          overlayImgRef.current.style.left = `${newX}%`
+          overlayImgRef.current.style.top = `${newY}%`
+        }
+        if (overlayRafRef.current === null) {
+          overlayRafRef.current = requestAnimationFrame(() => {
+            overlayRafRef.current = null
+            const p = lastOverlayPosRef.current
+            if (p) onOverlayMove(p.x, p.y)
+          })
+        }
+        return
+      }
+
+      // Emoji drag
+      if (emojiDragIdRef.current !== null) {
+        const start = emojiDragStartRef.current
+        if (!start || !containerRef.current) return
+        const rect = containerRef.current.getBoundingClientRect()
+        const dxPct = ((e.clientX - start.mx) / rect.width) * 100
+        const dyPct = ((e.clientY - start.my) / rect.height) * 100
+        const rawX = Math.max(2, Math.min(98, start.initX + dxPct))
+        const rawY = Math.max(2, Math.min(98, start.initY + dyPct))
+        const { x: newX, y: newY, hx, hy } = applySnap(rawX, rawY)
+        updateSnapLines(hx, hy)
+        lastEmojiPosRef.current = { x: newX, y: newY }
+        const el = containerRef.current.querySelector(`[data-emoji-id="${emojiDragIdRef.current}"]`) as HTMLElement | null
+        if (el) {
+          el.style.left = `${newX}%`
+          el.style.top = `${newY}%`
+        }
+        if (emojiRafRef.current === null) {
+          emojiRafRef.current = requestAnimationFrame(() => {
+            emojiRafRef.current = null
+            const p = lastEmojiPosRef.current
+            const id = emojiDragIdRef.current
+            if (p && id) onEmojiMove(id, p.x, p.y)
+          })
+        }
+        return
+      }
+
       // Crop drag
       if (cropDragModeRef.current !== 'idle') {
         const container = cropContainerRef.current
@@ -358,15 +506,20 @@ export default function PreviewPanel({
         }
         return
       }
-      // Video drag
+      // Video drag (social-post) — snap to center offset (0,0)
       if (isVideoMovingRef.current) {
         const start = videoMoveStartRef.current
         if (!start || !containerRef.current) return
         const rect = containerRef.current.getBoundingClientRect()
         const dxPct = ((e.clientX - start.mouseX) / rect.width)  * 100
         const dyPct = ((e.clientY - start.mouseY) / rect.height) * 100
-        const newX  = Math.max(-80, Math.min(80, start.initX + dxPct))
-        const newY  = Math.max(-80, Math.min(80, start.initY + dyPct))
+        let newX = Math.max(-80, Math.min(80, start.initX + dxPct))
+        let newY = Math.max(-80, Math.min(80, start.initY + dyPct))
+        // snap offset to 0 = perfectly centered
+        let hx: number | null = null, hy: number | null = null
+        if (Math.abs(newX) < SNAP_THRESHOLD) { newX = 0; hx = 50 }
+        if (Math.abs(newY) < SNAP_THRESHOLD) { newY = 0; hy = 50 }
+        updateSnapLines(hx, hy)
         containerRef.current.style.setProperty('--vid-x', `${newX}%`)
         containerRef.current.style.setProperty('--vid-y', `${newY}%`)
         lastVideoPosRef.current = { x: newX, y: newY }
@@ -381,20 +534,46 @@ export default function PreviewPanel({
       }
       // Subtitle drag
       if (!isDraggingRef.current) return
-      const pos = getPosFromEvent(e)
-      if (!pos) return
+      const raw = getPosFromEvent(e)
+      if (!raw) return
+      const { x, y, hx, hy } = applySnap(raw.x, raw.y)
+      const pos = { x, y }
+      updateSnapLines(hx, hy)
       setCSSSubPos(pos, activeLayer)
       lastPosRef.current = { pos, layer: activeLayer }
       if (rafRef.current === null) {
         rafRef.current = requestAnimationFrame(() => {
           rafRef.current = null
           const p = lastPosRef.current
-          if (p) { p.layer === 'auto' ? onAutoPositionChange(p.pos) : onCustomPositionChange(p.pos) }
+          if (p) {
+            if (p.layer === 'auto') onAutoPositionChange(p.pos)
+            else if (p.layer === 'custom') onCustomPositionChange(p.pos)
+            else if (p.layer === 'custom2') onCustom2PositionChange(p.pos)
+          }
         })
       }
     }
 
     const onUp = () => {
+      if (overlayDragRef.current) {
+        overlayDragRef.current = false
+        if (overlayRafRef.current !== null) { cancelAnimationFrame(overlayRafRef.current); overlayRafRef.current = null }
+        const p = lastOverlayPosRef.current
+        if (p) { onOverlayMove(p.x, p.y); lastOverlayPosRef.current = null }
+        overlayDragStartRef.current = null
+        clearSnapLines()
+        return
+      }
+      if (emojiDragIdRef.current !== null) {
+        if (emojiRafRef.current !== null) { cancelAnimationFrame(emojiRafRef.current); emojiRafRef.current = null }
+        const p = lastEmojiPosRef.current
+        const id = emojiDragIdRef.current
+        if (p && id) { onEmojiMove(id, p.x, p.y); lastEmojiPosRef.current = null }
+        emojiDragIdRef.current = null
+        emojiDragStartRef.current = null
+        clearSnapLines()
+        return
+      }
       if (cropDragModeRef.current !== 'idle') {
         cropDragModeRef.current = 'idle'
         cropDragStartRef.current = null
@@ -413,6 +592,7 @@ export default function PreviewPanel({
         const p = lastVideoPosRef.current
         if (p) { onVideoOffsetChange(p.x, p.y); lastVideoPosRef.current = null }
         videoMoveStartRef.current = null
+        clearSnapLines()
         return
       }
       if (!isDraggingRef.current) return
@@ -420,19 +600,23 @@ export default function PreviewPanel({
       if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
       const p = lastPosRef.current
       if (p) {
-        p.layer === 'auto' ? onAutoPositionChange(p.pos) : onCustomPositionChange(p.pos)
+        if (p.layer === 'auto') onAutoPositionChange(p.pos)
+        else if (p.layer === 'custom') onCustomPositionChange(p.pos)
+        else if (p.layer === 'custom2') onCustom2PositionChange(p.pos)
         lastPosRef.current = null
       }
+      clearSnapLines()
     }
 
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup',   onUp)
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-  }, [activeLayer, getPosFromEvent, setCSSSubPos, onAutoPositionChange, onCustomPositionChange, onVideoOffsetChange, onSocialVideoScaleChange, videoFormat, socialVideoScale])
+  }, [activeLayer, getPosFromEvent, setCSSSubPos, onAutoPositionChange, onCustomPositionChange, onCustom2PositionChange, onEmojiMove, onVideoOffsetChange, onSocialVideoScaleChange, videoFormat, socialVideoScale, onOverlayMove, updateSnapLines, clearSnapLines])
 
   // ── Text helpers ──
-  const autoText   = autoLines.length   > 0 ? autoLines[Math.floor(autoLines.length / 2)].text   : 'Auto subtitle'
-  const customText = customLines.length > 0 ? customLines[Math.floor(customLines.length / 2)].text : 'Custom text'
+  const autoText    = autoLines.length    > 0 ? autoLines[Math.floor(autoLines.length / 2)].text    : 'Auto subtitle'
+  const customText  = customLines.length  > 0 ? customLines[Math.floor(customLines.length / 2)].text  : 'Custom text'
+  const custom2Text = custom2Lines.length > 0 ? custom2Lines[Math.floor(custom2Lines.length / 2)].text : 'Text 2'
 
   const FONT_SCALE = 1 / 1080
   function subtitleStyle(style: SubtitleLayerStyle, dim: boolean): React.CSSProperties {
@@ -447,7 +631,7 @@ export default function PreviewPanel({
       WebkitTextStroke: style.outlineWidth > 0 ? `${style.outlineWidth * 0.4 * FONT_SCALE * 100}cqw #000` : undefined,
       whiteSpace: 'pre-wrap',
       wordBreak: 'break-word',
-      textAlign: 'center',
+      textAlign: style.textAlign === 'left' ? 'left' : 'center',
       opacity: dim ? 0.45 : 1,
       transition: 'opacity 0.15s',
     }
@@ -456,7 +640,8 @@ export default function PreviewPanel({
   const barH = Math.max(5, Math.min(45, videoBarHeight))
 
   const containerBg =
-    videoFormat === 'social-post' ? `#${socialBgColor}` : undefined
+    videoFormat === 'social-post' ? `#${socialBgColor}` :
+    videoFormat === 'standard'    ? `#${standardBgColor}` : undefined
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
@@ -471,73 +656,94 @@ export default function PreviewPanel({
 
       {/* ── Crop editor mode (full-panel) ── */}
       {cropEditClipId && activeCropRect !== null && (
-        <div className="flex-1 flex flex-col gap-2 w-full min-h-0">
+        <div className="flex-1 flex flex-col gap-3 w-full min-h-0">
 
           {/* Top toolbar: Cancel / hint / readout / Reset / Done */}
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               type="button"
               onClick={onCropCancel}
-              className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors px-2.5 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700"
+              className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex-shrink-0"
             >
               Cancel
             </button>
-            <span className="text-[11px] text-zinc-600 flex-1 min-w-0 truncate">Drag to draw · corners to resize · move inside</span>
-            <span className="text-[11px] font-mono text-zinc-500 flex-shrink-0 tabular-nums">
-              {Math.round(activeCropRect.w)}×{Math.round(activeCropRect.h)}
+            <span className="text-xs text-zinc-600 flex-1 min-w-0 truncate">Drag corners to resize · drag inside to move</span>
+            <span className="text-xs font-mono text-zinc-400 flex-shrink-0 tabular-nums">
+              {thumbnailNaturalSize && thumbLoaded
+                ? `${Math.round(activeCropRect.w / 100 * thumbnailNaturalSize.w)}×${Math.round(activeCropRect.h / 100 * thumbnailNaturalSize.h)} @ ${Math.round(activeCropRect.x / 100 * thumbnailNaturalSize.w)},${Math.round(activeCropRect.y / 100 * thumbnailNaturalSize.h)}`
+                : `${Math.round(activeCropRect.w)}×${Math.round(activeCropRect.h)}`
+              }
             </span>
             <button
               type="button"
               onClick={() => onCropChange({ x: 0, y: 0, w: 100, h: 100 })}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 flex-shrink-0"
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex-shrink-0"
             >
               Reset
             </button>
             <button
               type="button"
               onClick={onCropDone}
-              className="text-xs bg-violet-600 hover:bg-violet-500 text-white font-medium rounded px-3 py-1.5 transition-colors flex-shrink-0"
+              className="text-sm bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-lg px-5 py-2 transition-colors flex-shrink-0"
             >
               Done
             </button>
           </div>
 
-          {/* Crop container sized to source AR — no letterboxing */}
+          {/* Crop container sized to source AR */}
           <div className="flex-1 flex items-center justify-center w-full min-h-0">
             <div
               ref={cropContainerRef}
               className="relative overflow-hidden rounded-xl border border-zinc-700 select-none"
               style={{
-                aspectRatio: sourceVideoAR ? String(sourceVideoAR) : '16/9',
-                maxWidth: '100%',
-                maxHeight: '100%',
+                aspectRatio: sourceVideoAR ? String(sourceVideoAR) : '9/16',
+                // Drive from height for portrait (AR≤1), from width for landscape (AR>1)
+                ...(sourceVideoAR && sourceVideoAR > 1
+                  ? { width: '100%', maxHeight: '100%' }
+                  : { height: '100%', maxWidth: '100%' }
+                ),
                 cursor: 'crosshair',
               }}
               onMouseDown={handleCropMouseDown}
             >
-              {sourceVideoUrl ? (
-                <>
-                  <video
-                    ref={cropVideoRef}
-                    src={sourceVideoUrl}
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none', display: cropVideoError ? 'none' : 'block' }}
-                    autoPlay
-                    loop
-                    playsInline
-                    muted
-                    onError={() => setCropVideoError(true)}
-                  />
-                  {cropVideoError && (
-                    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#18181b', gap: 8, pointerEvents: 'none' }}>
-                      <span style={{ color: '#f87171', fontSize: 13, fontWeight: 500 }}>Video unavailable</span>
-                      <span style={{ color: '#71717a', fontSize: 11 }}>Re-import your video to reload the source</span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#18181b', gap: 8, pointerEvents: 'none' }}>
-                  <span style={{ color: '#a1a1aa', fontSize: 13, fontWeight: 500 }}>No source video</span>
-                  <span style={{ color: '#71717a', fontSize: 11 }}>Re-import your video to use the crop editor</span>
+              {/* Background: always zinc-900 so no black flash */}
+              <div className="absolute inset-0 bg-zinc-900" />
+
+              {/* Spinner while image loads */}
+              {thumbnailSrc && !thumbLoaded && !thumbError && (
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                  <div className="w-9 h-9 rounded-full border-[3px] border-violet-500 border-t-transparent animate-spin" />
+                </div>
+              )}
+
+              {/* Thumbnail — always in DOM when src is set, hidden until loaded */}
+              {thumbnailSrc && (
+                <img
+                  key={thumbnailSrc}
+                  src={thumbnailSrc}
+                  alt="Video frame"
+                  onLoad={(e) => {
+                    const img = e.currentTarget
+                    setThumbnailNaturalSize({ w: img.naturalWidth, h: img.naturalHeight })
+                    setThumbLoaded(true)
+                  }}
+                  onError={() => setThumbError(true)}
+                  style={{
+                    position: 'absolute',
+                    top: 0, left: 0,
+                    width: '100%', height: '100%',
+                    objectFit: 'fill',
+                    pointerEvents: 'none',
+                    display: thumbLoaded ? 'block' : 'none',
+                  }}
+                />
+              )}
+
+              {/* Fallback: no source or load error */}
+              {(!thumbnailSrc || thumbError) && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10">
+                  <span className="text-zinc-400 text-sm">Frame unavailable</span>
+                  <span className="text-zinc-600 text-xs">Re-import your video to use the crop editor</span>
                 </div>
               )}
 
@@ -581,10 +787,11 @@ export default function PreviewPanel({
                 pointerEvents: 'none',
               }} />
 
-              {/* Corner handles (8: 4 corners + 4 edge midpoints) */}
+              {/* Corner + edge handles */}
               {(['tl', 'tc', 'tr', 'ml', 'mr', 'bl', 'bc', 'br'] as const).map(handle => {
                 const isCorner = handle.length === 2 && !handle.includes('c') && !handle.includes('m')
                 const isMid = handle.includes('c') || handle.includes('m')
+                if (!isCorner && !isMid) return null
                 const lx = handle.startsWith('t') || handle.startsWith('b')
                   ? (handle.endsWith('l') ? activeCropRect.x : handle.endsWith('r') ? activeCropRect.x + activeCropRect.w : activeCropRect.x + activeCropRect.w / 2)
                   : (handle === 'ml' ? activeCropRect.x : activeCropRect.x + activeCropRect.w)
@@ -598,7 +805,6 @@ export default function PreviewPanel({
                   : handle === 'tc' || handle === 'bc' ? 'ns-resize'
                   : 'ew-resize'
                 const corner = isCorner ? handle as 'tl'|'tr'|'bl'|'br' : null
-                if (!isCorner && !isMid) return null
                 return (
                   <div
                     key={handle}
@@ -607,8 +813,8 @@ export default function PreviewPanel({
                       position: 'absolute',
                       left: `${lx}%`, top: `${ly}%`,
                       transform: 'translate(-50%, -50%)',
-                      width: isCorner ? 12 : 10,
-                      height: isCorner ? 12 : 10,
+                      width: isCorner ? 14 : 10,
+                      height: isCorner ? 14 : 10,
                       background: '#fff',
                       borderRadius: 2,
                       cursor,
@@ -631,7 +837,7 @@ export default function PreviewPanel({
             onMouseDown={handleMouseDown}
             className="relative overflow-hidden rounded-xl border border-zinc-800 shadow-2xl bg-zinc-900 select-none"
             style={{
-              aspectRatio: '9/16',
+              aspectRatio: `${presetWidth}/${presetHeight}`,
               height: '100%',
               maxHeight: 'calc(100vh - 140px)',
               containerType: 'inline-size',
@@ -644,7 +850,7 @@ export default function PreviewPanel({
                 {/* ── Standard: full bleed ── */}
                 {videoFormat === 'standard' && (
                   <video ref={videoRef} src={videoUrl}
-                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                    className="absolute inset-0 w-full h-full object-contain pointer-events-none"
                     preload="metadata" playsInline />
                 )}
 
@@ -743,17 +949,29 @@ export default function PreviewPanel({
               </div>
             )}
 
-            {/* Overlay image */}
+            {/* Snap guide lines — shown during drag when snapping */}
+            <div ref={snapVLineRef}   style={{ display: 'none', position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(139,92,246,0.75)', pointerEvents: 'none', zIndex: 50 }} />
+            <div ref={snapHLineRef}   style={{ display: 'none', position: 'absolute', top: '50%', left: 0, right: 0, height: 1, background: 'rgba(139,92,246,0.75)', pointerEvents: 'none', zIndex: 50 }} />
+            <div ref={snapH25LineRef} style={{ display: 'none', position: 'absolute', top: '25%', left: 0, right: 0, height: 1, background: 'rgba(139,92,246,0.5)',  pointerEvents: 'none', zIndex: 50 }} />
+            <div ref={snapH75LineRef} style={{ display: 'none', position: 'absolute', top: '75%', left: 0, right: 0, height: 1, background: 'rgba(139,92,246,0.5)',  pointerEvents: 'none', zIndex: 50 }} />
+
+            {/* Overlay image — draggable */}
             {overlayEnabled && overlayPreviewUrl && (
-              <img src={overlayPreviewUrl} alt="overlay"
-                className="pointer-events-none object-contain"
-                style={overlayCSS(overlayPosition, overlayScale)} />
+              <img
+                ref={overlayImgRef}
+                src={overlayPreviewUrl}
+                alt="overlay"
+                draggable={false}
+                className="object-contain"
+                style={{ ...overlayCSS(overlayX, overlayY, overlayRotation, overlayScale), cursor: 'move', pointerEvents: 'auto', zIndex: 15 }}
+                onMouseDown={handleOverlayDragStart}
+              />
             )}
 
             {/* Auto subtitle layer */}
             {autoEnabled && (
               <div className="absolute pointer-events-none"
-                style={{ left: 'var(--auto-x)', top: 'var(--auto-y)', transform: 'translate(-50%,-50%)', maxWidth: '92%' }}>
+                style={{ left: 'var(--auto-x)', top: 'var(--auto-y)', transform: autoStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
                 <span style={subtitleStyle(autoStyle, activeLayer === 'custom')}>{autoText}</span>
               </div>
             )}
@@ -761,13 +979,42 @@ export default function PreviewPanel({
             {/* Custom text layer */}
             {customEnabled && (
               <div className="absolute pointer-events-none"
-                style={{ left: 'var(--custom-x)', top: 'var(--custom-y)', transform: 'translate(-50%,-50%)', maxWidth: '92%' }}>
+                style={{ left: 'var(--custom-x)', top: 'var(--custom-y)', transform: customStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
                 <span style={subtitleStyle(customStyle, activeLayer === 'auto')}>{customText}</span>
               </div>
             )}
 
+            {/* Custom text 2 layer */}
+            {custom2Enabled && (
+              <div className="absolute pointer-events-none"
+                style={{ left: 'var(--custom2-x)', top: 'var(--custom2-y)', transform: custom2Style.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
+                <span style={subtitleStyle(custom2Style, activeLayer !== 'custom2')}>{custom2Text}</span>
+              </div>
+            )}
+
+            {/* Emoji stickers */}
+            {emojiStickers.map(sticker => (
+              <div
+                key={sticker.id}
+                data-emoji-id={sticker.id}
+                className="absolute select-none pointer-events-auto"
+                style={{
+                  left: `${sticker.x}%`,
+                  top: `${sticker.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  fontSize: `${sticker.size}cqw`,
+                  cursor: 'move',
+                  lineHeight: 1,
+                  zIndex: 20,
+                }}
+                onMouseDown={e => handleEmojiDragStart(e, sticker.id, sticker.x, sticker.y)}
+              >
+                {sticker.emoji}
+              </div>
+            ))}
+
             {/* Hints */}
-            {(autoEnabled || customEnabled) && videoFormat !== 'social-post' && (
+            {(autoEnabled || customEnabled || custom2Enabled) && activeLayer !== 'emoji' && videoFormat !== 'social-post' && (
               <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
                 <span className="text-[10px] text-white/40 bg-black/30 rounded-full px-2 py-0.5">drag to reposition text</span>
               </div>

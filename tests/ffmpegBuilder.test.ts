@@ -73,7 +73,7 @@ describe('buildTrimArgs', () => {
     expect(args[args.length - 1]).toBe('/tmp/trimmed.mp4')
   })
 
-  it('includes vertical crop filter', () => {
+  it('normalizes pixel dimensions without scaling to fixed resolution', () => {
     const args = buildTrimArgs({
       inputVideo: '/tmp/source.mp4',
       outputVideo: '/tmp/out.mp4',
@@ -82,7 +82,9 @@ describe('buildTrimArgs', () => {
     })
     const vfIdx = args.indexOf('-vf')
     expect(vfIdx).toBeGreaterThan(-1)
-    expect(args[vfIdx + 1]).toContain('1080:1920')
+    // Preserves source resolution, ensures even pixels (H.264 requirement)
+    expect(args[vfIdx + 1]).toContain('trunc(iw/2)*2')
+    expect(args[vfIdx + 1]).toContain('format=yuv420p')
   })
 })
 

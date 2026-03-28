@@ -7,18 +7,30 @@ import TrimStep from './components/TrimStep'
 import SubtitlesStep from './components/SubtitlesStep'
 import VoiceoverStep from './components/VoiceoverStep'
 import OverlayStep from './components/OverlayStep'
-import FormatStep from './components/FormatStep'
 import type { VideoFormat } from './components/FormatStep'
 import ExportStep from './components/ExportStep'
 import PreviewPanel from './components/PreviewPanel'
+import TopBar from './components/TopBar'
+import Sidebar from './components/Sidebar'
+import type { EditorStep } from './components/Sidebar'
+import PlatformStep from './components/PlatformStep'
+import { PLATFORM_PRESETS, DEFAULT_PRESET } from '../lib/platformPresets'
+import type { PlatformPreset } from '../lib/platformPresets'
 import { useJobProgress } from '../hooks/useJobProgress'
 import { useMultiJobProgress } from '../hooks/useMultiJobProgress'
 import { downloadVideo, trimVideo, transcribeVideo, exportVideo } from '../lib/api'
 import type { ProgressEvent } from '../hooks/useJobProgress'
 
 type Status = 'idle' | 'loading' | 'done' | 'error'
-type OverlayPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
 type SubtitlePosition = { x: number; y: number }
+
+interface EmojiSticker {
+  id: string
+  emoji: string
+  x: number
+  y: number
+  size: number
+}
 
 interface SubtitleLine {
   id: number
@@ -57,7 +69,11 @@ export interface Clip {
   subtitleError: string | null
   customTextEnabled: boolean
   customTextLines: SubtitleLine[]
+  custom2TextEnabled: boolean
+  custom2TextLines: SubtitleLine[]
+  emojiStickers: EmojiSticker[]
   exportJobId: string | null
+  exportPresetId: string | null  // preset id used for this export (guard against stale results)
   exportStatus: Status
   exportProgress: number
   exportError: string | null
@@ -76,7 +92,7 @@ interface AppState {
   // Clips
   clips: Clip[]
   activeClipId: string | null
-  activeSubtitleLayer: 'auto' | 'custom'
+  activeSubtitleLayer: 'auto' | 'custom' | 'custom2' | 'emoji'
   cropEditClipId: string | null
   cropEditOriginalCrop: { x: number; y: number; w: number; h: number } | null
   sourceVideoAR: number | null
@@ -107,6 +123,14 @@ interface AppState {
   customTextBold: boolean
   customTextOutlineWidth: number
 
+  // Custom text 2 layer style
+  custom2TextFontSize: number
+  custom2TextColor: string
+  custom2TextPosition: SubtitlePosition
+  custom2TextFontFamily: string
+  custom2TextBold: boolean
+  custom2TextOutlineWidth: number
+
   // Voiceover
   voiceoverEnabled: boolean
   voiceoverFile: File | null
@@ -117,11 +141,25 @@ interface AppState {
   overlayEnabled: boolean
   overlayFile: File | null
   overlayPreviewUrl: string | null
-  overlayPosition: OverlayPosition
+  overlayX: number
+  overlayY: number
+  overlayRotation: number
   overlayScale: number
+
+  // Text alignment
+  subtitleTextAlign: 'center' | 'left'
+  customTextAlign: 'center' | 'left'
+  custom2TextAlign: 'center' | 'left'
+
+  // Platform / output preset
+  activePlatformPreset: PlatformPreset
+  activeStep: EditorStep
+  customPresetWidth: number
+  customPresetHeight: number
 
   // Format
   videoFormat: VideoFormat
+  standardBgColor: string
   socialBgColor: string
   socialVideoScale: number
   videoOffsetX: number
@@ -159,7 +197,11 @@ function makeClip(startSecs: number, endSecs: number, index: number): Clip {
     subtitleError: null,
     customTextEnabled: false,
     customTextLines: [],
+    custom2TextEnabled: false,
+    custom2TextLines: [],
+    emojiStickers: [],
     exportJobId: null,
+    exportPresetId: null,
     exportStatus: 'idle',
     exportProgress: 0,
     exportError: null,
@@ -206,10 +248,17 @@ const initialState: AppState = {
 
   customTextFontSize: 48,
   customTextColor: 'FFFF00',
-  customTextPosition: { x: 50, y: 15 },
+  customTextPosition: { x: 50, y: 50 },
   customTextFontFamily: 'Impact',
   customTextBold: true,
   customTextOutlineWidth: 3,
+
+  custom2TextFontSize: 48,
+  custom2TextColor: 'FF0000',
+  custom2TextPosition: { x: 50, y: 50 },
+  custom2TextFontFamily: 'Arial',
+  custom2TextBold: true,
+  custom2TextOutlineWidth: 3,
 
   voiceoverEnabled: false,
   voiceoverFile: null,
@@ -219,10 +268,22 @@ const initialState: AppState = {
   overlayEnabled: false,
   overlayFile: null,
   overlayPreviewUrl: null,
-  overlayPosition: 'bottom-right',
+  overlayX: 50,
+  overlayY: 50,
+  overlayRotation: 0,
   overlayScale: 20,
 
+  subtitleTextAlign: 'center',
+  customTextAlign: 'center',
+  custom2TextAlign: 'center',
+
+  activePlatformPreset: DEFAULT_PRESET,
+  activeStep: 'import' as EditorStep,
+  customPresetWidth: 1080,
+  customPresetHeight: 1920,
+
   videoFormat: 'standard',
+  standardBgColor: '000000',
   socialBgColor: 'FFFFFF',
   socialVideoScale: 70,
   videoOffsetX: 0,
@@ -234,21 +295,6 @@ const initialState: AppState = {
 export default function HomePage() {
   const [state, setState] = useState<AppState>(initialState)
   const overlayPreviewUrlRef = useRef<string | null>(null)
-
-  // Resizable panel
-  const [leftWidth, setLeftWidth] = useState(400)
-  const isPanelDragging = useRef(false)
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!isPanelDragging.current) return
-      setLeftWidth(Math.max(280, Math.min(700, e.clientX)))
-    }
-    const onUp = () => { isPanelDragging.current = false }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-  }, [])
 
   const updateState = useCallback((patch: Partial<AppState>) => {
     setState(prev => ({ ...prev, ...patch }))
@@ -318,6 +364,8 @@ export default function HomePage() {
       ...prev,
       clips: prev.clips.map(c => {
         if (c.id !== clipId) return c
+        // Guard: if exportJobId was cleared (preset changed), ignore stale SSE events
+        if (c.exportJobId === null) return c
         if (event.type === 'progress') {
           return { ...c, exportProgress: event.percent ?? 0, exportStatus: 'loading' }
         } else if (event.type === 'done') {
@@ -381,13 +429,58 @@ export default function HomePage() {
     }
   }, [updateState])
 
+  const handleTrimClip = useCallback(async (clipId: string, clipOverride?: Clip) => {
+    const importJobId = state.importJobId
+    if (!importJobId) return
+    const clip = clipOverride ?? state.clips.find(c => c.id === clipId)
+    if (!clip) return
+
+    setState(prev => ({
+      ...prev,
+      clips: prev.clips.map(c => c.id === clipId
+        ? { ...c, trimStatus: 'loading', trimProgress: 0, trimError: null, trimmedVideoUrl: null }
+        : c
+      ),
+    }))
+
+    try {
+      const { jobId: opJobId } = await trimVideo(
+        importJobId,
+        formatTime(clip.startSecs),
+        formatTime(clip.endSecs),
+        clip.clipSuffix,
+        { x: clip.cropX, y: clip.cropY, w: clip.cropW, h: clip.cropH },
+      )
+      setState(prev => ({
+        ...prev,
+        clips: prev.clips.map(c => c.id === clipId ? { ...c, trimJobId: opJobId } : c),
+      }))
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Trim failed'
+      setState(prev => ({
+        ...prev,
+        clips: prev.clips.map(c => c.id === clipId
+          ? { ...c, trimStatus: 'error', trimError: message }
+          : c
+        ),
+      }))
+    }
+  }, [state.importJobId, state.clips])
+
+  const handleTrimAll = useCallback(() => {
+    for (const clip of state.clips) {
+      if (clip.trimStatus === 'idle' || clip.trimStatus === 'error') {
+        handleTrimClip(clip.id)
+      }
+    }
+  }, [state.clips, handleTrimClip])
+
   const handleAddClip = useCallback((startSecs: number, endSecs: number) => {
     pushHistory()
-    setState(prev => {
-      const clip = makeClip(startSecs, endSecs, prev.clips.length + 1)
-      return { ...prev, clips: [...prev.clips, clip] }
-    })
-  }, [pushHistory])
+    const clip = makeClip(startSecs, endSecs, state.clips.length + 1)
+    setState(prev => ({ ...prev, clips: [...prev.clips, clip] }))
+    handleTrimClip(clip.id, clip)
+  }, [pushHistory, state.clips.length, handleTrimClip])
 
   const handleRemoveClip = useCallback((clipId: string) => {
     pushHistory()
@@ -465,57 +558,29 @@ export default function HomePage() {
     })
   }, [])
 
+  const handlePresetChange = useCallback((preset: PlatformPreset) => {
+    setState(prev => ({
+      ...prev,
+      activePlatformPreset: preset,
+      // Clear all export results — they were encoded for the previous preset dimensions
+      clips: prev.clips.map(c => ({
+        ...c,
+        exportJobId: null,
+        exportPresetId: null,
+        exportStatus: 'idle' as Status,
+        exportProgress: 0,
+        exportError: null,
+        exportUrl: null,
+      })),
+    }))
+  }, [])
+
   const bgMusicFileRef = useRef<string | null>(null)
   const handleBgMusicFile = useCallback((f: File | null) => {
     if (bgMusicFileRef.current) { URL.revokeObjectURL(bgMusicFileRef.current); bgMusicFileRef.current = null }
     updateState({ bgMusicFile: f })
   }, [updateState])
 
-  const handleTrimClip = useCallback(async (clipId: string) => {
-    const importJobId = state.importJobId
-    if (!importJobId) return
-    const clip = state.clips.find(c => c.id === clipId)
-    if (!clip) return
-
-    setState(prev => ({
-      ...prev,
-      clips: prev.clips.map(c => c.id === clipId
-        ? { ...c, trimStatus: 'loading', trimProgress: 0, trimError: null, trimmedVideoUrl: null }
-        : c
-      ),
-    }))
-
-    try {
-      const { jobId: opJobId } = await trimVideo(
-        importJobId,
-        formatTime(clip.startSecs),
-        formatTime(clip.endSecs),
-        clip.clipSuffix,
-        { x: clip.cropX, y: clip.cropY, w: clip.cropW, h: clip.cropH },
-      )
-      setState(prev => ({
-        ...prev,
-        clips: prev.clips.map(c => c.id === clipId ? { ...c, trimJobId: opJobId } : c),
-      }))
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Trim failed'
-      setState(prev => ({
-        ...prev,
-        clips: prev.clips.map(c => c.id === clipId
-          ? { ...c, trimStatus: 'error', trimError: message }
-          : c
-        ),
-      }))
-    }
-  }, [state.importJobId, state.clips])
-
-  const handleTrimAll = useCallback(() => {
-    for (const clip of state.clips) {
-      if (clip.trimStatus === 'idle' || clip.trimStatus === 'error') {
-        handleTrimClip(clip.id)
-      }
-    }
-  }, [state.clips, handleTrimClip])
 
   const handleGenerateSubtitles = useCallback(async () => {
     const importJobId = state.importJobId
@@ -572,16 +637,71 @@ export default function HomePage() {
     }
   }, [])
 
+  const handleAddEmoji = useCallback((emoji: string) => {
+    const id = state.activeClipId
+    if (!id) return
+    const stickerId = Math.random().toString(36).slice(2, 10)
+    setState(prev => ({
+      ...prev,
+      clips: prev.clips.map(c => c.id === id
+        ? { ...c, emojiStickers: [...c.emojiStickers, { id: stickerId, emoji, x: 50, y: 50, size: 8 }] }
+        : c
+      ),
+    }))
+  }, [state.activeClipId])
+
+  const handleRemoveEmoji = useCallback((stickerId: string) => {
+    const id = state.activeClipId
+    if (!id) return
+    setState(prev => ({
+      ...prev,
+      clips: prev.clips.map(c => c.id === id
+        ? { ...c, emojiStickers: c.emojiStickers.filter(s => s.id !== stickerId) }
+        : c
+      ),
+    }))
+  }, [state.activeClipId])
+
+  const handleEmojiSizeChange = useCallback((stickerId: string, size: number) => {
+    const id = state.activeClipId
+    if (!id) return
+    setState(prev => ({
+      ...prev,
+      clips: prev.clips.map(c => c.id === id
+        ? { ...c, emojiStickers: c.emojiStickers.map(s => s.id === stickerId ? { ...s, size } : s) }
+        : c
+      ),
+    }))
+  }, [state.activeClipId])
+
+  const handleEmojiMove = useCallback((stickerId: string, x: number, y: number) => {
+    setState(prev => {
+      const id = prev.activeClipId
+      if (!id) return prev
+      return {
+        ...prev,
+        clips: prev.clips.map(c => c.id === id
+          ? { ...c, emojiStickers: c.emojiStickers.map(s => s.id === stickerId ? { ...s, x, y } : s) }
+          : c
+        ),
+      }
+    })
+  }, [])
+
   const handleExportClip = useCallback(async (clipId: string) => {
     const importJobId = state.importJobId
     if (!importJobId) return
     const clip = state.clips.find(c => c.id === clipId)
     if (!clip) return
 
+    const presetId = state.activePlatformPreset.id
+    const presetWidth = presetId === 'custom' ? state.customPresetWidth : state.activePlatformPreset.width
+    const presetHeight = presetId === 'custom' ? state.customPresetHeight : state.activePlatformPreset.height
+
     setState(prev => ({
       ...prev,
       clips: prev.clips.map(c => c.id === clipId
-        ? { ...c, exportStatus: 'loading', exportProgress: 0, exportError: null, exportUrl: null }
+        ? { ...c, exportStatus: 'loading', exportProgress: 0, exportError: null, exportUrl: null, exportPresetId: presetId }
         : c
       ),
     }))
@@ -598,6 +718,7 @@ export default function HomePage() {
           fontFamily: state.subtitleFontFamily,
           bold: state.subtitleBold,
           outlineWidth: state.subtitleOutlineWidth,
+          textAlign: state.subtitleTextAlign,
         } : undefined,
         customTextSubtitles: clip.customTextEnabled && clip.customTextLines.length > 0 ? clip.customTextLines : undefined,
         customTextSubtitleStyle: clip.customTextEnabled && clip.customTextLines.length > 0 ? {
@@ -607,7 +728,19 @@ export default function HomePage() {
           fontFamily: state.customTextFontFamily,
           bold: state.customTextBold,
           outlineWidth: state.customTextOutlineWidth,
+          textAlign: state.customTextAlign,
         } : undefined,
+        custom2TextSubtitles: clip.custom2TextEnabled && clip.custom2TextLines.length > 0 ? clip.custom2TextLines : undefined,
+        custom2TextSubtitleStyle: clip.custom2TextEnabled && clip.custom2TextLines.length > 0 ? {
+          fontSize: state.custom2TextFontSize,
+          color: state.custom2TextColor,
+          position: state.custom2TextPosition,
+          fontFamily: state.custom2TextFontFamily,
+          bold: state.custom2TextBold,
+          outlineWidth: state.custom2TextOutlineWidth,
+          textAlign: state.custom2TextAlign,
+        } : undefined,
+        emojiStickers: clip.emojiStickers.length > 0 ? clip.emojiStickers : undefined,
         voiceoverEnabled: state.voiceoverEnabled,
         voiceoverFile: state.voiceoverEnabled ? (state.voiceoverFile ?? undefined) : undefined,
         originalVolume: state.muteOriginalAudio ? 0 : state.originalVolume,
@@ -619,9 +752,12 @@ export default function HomePage() {
         bgMusicFadeOut: state.bgMusicFadeOut,
         overlayEnabled: state.overlayEnabled,
         overlayFile: state.overlayEnabled ? (state.overlayFile ?? undefined) : undefined,
-        overlayPosition: state.overlayPosition,
+        overlayX: state.overlayX,
+        overlayY: state.overlayY,
+        overlayRotation: state.overlayRotation,
         overlayScale: state.overlayScale,
         videoFormat: state.videoFormat,
+        standardBgColor: state.standardBgColor,
         socialBgColor: state.socialBgColor,
         socialVideoScale: state.socialVideoScale,
         videoOffsetX: state.videoOffsetX,
@@ -634,6 +770,8 @@ export default function HomePage() {
         zoomEnabled: clip.zoomEnabled,
         zoomX: clip.zoomX,
         zoomY: clip.zoomY,
+        presetWidth,
+        presetHeight,
       })
       setState(prev => ({
         ...prev,
@@ -669,29 +807,72 @@ export default function HomePage() {
     ? { x: cropEditClip.cropX, y: cropEditClip.cropY, w: cropEditClip.cropW, h: cropEditClip.cropH }
     : null
 
-  return (
-    <main className="flex h-screen overflow-hidden bg-zinc-950">
-      {/* ── Left: resizable scrollable editing panel (hidden in crop mode) ── */}
-      <div
-        className="flex-shrink-0 flex flex-col h-full border-r border-zinc-800 transition-none"
-        style={{ width: state.cropEditClipId ? 0 : leftWidth, overflow: 'hidden' }}
-      >
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 flex-shrink-0">
-          <div className="bg-violet-600 rounded-lg p-1.5">
-            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-zinc-100 leading-none">ClipForge</h1>
-            <p className="text-xs text-zinc-500">YouTube Shorts creator</p>
-          </div>
-        </div>
+  // Output dimensions from active preset
+  const outputWidth = state.activePlatformPreset.id === 'custom' ? state.customPresetWidth : state.activePlatformPreset.width
+  const outputHeight = state.activePlatformPreset.id === 'custom' ? state.customPresetHeight : state.activePlatformPreset.height
 
-        {/* Scrollable steps */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        <StepCard number={1} title="Import Video">
+  // Sidebar state
+  const completedSteps = new Set<EditorStep>([
+    ...(state.importStatus === 'done' ? ['import'] as EditorStep[] : []),
+    ...(anyTrimDone ? ['trim'] as EditorStep[] : []),
+  ])
+  const lockedSteps = new Set<EditorStep>(
+    state.importStatus !== 'done'
+      ? ['trim', 'platform', 'subtitles', 'voiceover', 'overlay', 'export'] as EditorStep[]
+      : []
+  )
+  const errorSteps = new Set<EditorStep>([
+    ...(state.importStatus === 'error' ? ['import'] as EditorStep[] : []),
+    ...(state.clips.some(c => c.trimStatus === 'error') ? ['trim'] as EditorStep[] : []),
+    ...(state.clips.some(c => c.exportStatus === 'error') ? ['export'] as EditorStep[] : []),
+  ])
+
+  const canExport = anyTrimDone
+
+  // Shared TrimStep crop edit callbacks (used in both old TrimStep and the new crop UI)
+  const handleStartCropEdit = useCallback((clipId: string) => {
+    pushHistory()
+    setState(prev => {
+      const clip = prev.clips.find(c => c.id === clipId)
+      if (!clip) return { ...prev, cropEditClipId: clipId, cropEditOriginalCrop: null }
+      const originalCrop = { x: clip.cropX, y: clip.cropY, w: clip.cropW, h: clip.cropH }
+      const isFullFrame = clip.cropX < 0.5 && clip.cropY < 0.5 && clip.cropW > 99.5 && clip.cropH > 99.5
+      let initCrop = originalCrop
+      if (isFullFrame && prev.sourceVideoAR) {
+        const ar = prev.sourceVideoAR
+        if (ar > 9 / 16) {
+          const w = (9 / 16 / ar) * 100
+          initCrop = { x: (100 - w) / 2, y: 0, w, h: 100 }
+        }
+      }
+      return {
+        ...prev,
+        cropEditClipId: clipId,
+        cropEditOriginalCrop: originalCrop,
+        clips: prev.clips.map(c => c.id === clipId
+          ? { ...c, cropX: initCrop.x, cropY: initCrop.y, cropW: initCrop.w, cropH: initCrop.h }
+          : c
+        ),
+      }
+    })
+  }, [pushHistory])
+
+  const handleEndCropEdit = useCallback(() => {
+    const clipId = state.cropEditClipId
+    const clip = state.clips.find(c => c.id === clipId)
+    const original = state.cropEditOriginalCrop
+    updateState({ cropEditClipId: null, cropEditOriginalCrop: null })
+    if (clipId && clip) {
+      const cropChanged = !original || clip.cropX !== original.x || clip.cropY !== original.y || clip.cropW !== original.w || clip.cropH !== original.h
+      if (cropChanged || clip.trimStatus !== 'done') handleTrimClip(clipId)
+    }
+  }, [state.cropEditClipId, state.clips, state.cropEditOriginalCrop, updateState, handleTrimClip])
+
+  // Render the active step's properties panel content
+  const renderStepContent = () => {
+    switch (state.activeStep) {
+      case 'import':
+        return (
           <ImportStep
             status={state.importStatus}
             progress={state.importProgress}
@@ -700,16 +881,28 @@ export default function HomePage() {
             importJobId={state.importJobId}
             videoDuration={state.sourceVideoDuration}
             onDownload={handleDownload}
+            onUseAnalysisText={(text) => {
+              setState(prev => {
+                if (prev.clips.length === 0) return prev
+                return {
+                  ...prev,
+                  clips: prev.clips.map(clip => ({
+                    ...clip,
+                    customTextEnabled: true,
+                    customTextLines: [{ id: 1, start: 0, end: Math.max(1, clip.endSecs - clip.startSecs), text }],
+                  })),
+                }
+              })
+            }}
           />
-        </StepCard>
-
-        <StepCard number={2} title="Clips" disabled={state.importStatus !== 'done'}>
+        )
+      case 'trim':
+        return (
           <TrimStep
             clips={state.clips}
             onAddClip={handleAddClip}
             onRemoveClip={handleRemoveClip}
             onTrimClip={handleTrimClip}
-            onTrimAll={handleTrimAll}
             onUpdateClipLabel={handleUpdateClipLabel}
             onUpdateClipCrop={handleUpdateClipCrop}
             onToggleClipFade={handleToggleClipFade}
@@ -717,36 +910,62 @@ export default function HomePage() {
             onStartZoomSelect={clipId => updateState({ zoomSelectClipId: clipId })}
             zoomSelectClipId={state.zoomSelectClipId}
             cropEditClipId={state.cropEditClipId}
-            onStartCropEdit={clipId => {
-              pushHistory()
-              const clip = state.clips.find(c => c.id === clipId)
-              updateState({
-                cropEditClipId: clipId,
-                cropEditOriginalCrop: clip ? { x: clip.cropX, y: clip.cropY, w: clip.cropW, h: clip.cropH } : null,
-              })
-            }}
-            onEndCropEdit={() => updateState({ cropEditClipId: null, cropEditOriginalCrop: null })}
+            onStartCropEdit={handleStartCropEdit}
+            onEndCropEdit={handleEndCropEdit}
             onSourceVideoAR={handleSetSourceVideoAR}
             sourceVideoUrl={state.sourceVideoUrl}
             disabled={state.importStatus !== 'done'}
           />
-        </StepCard>
-
-        <StepCard number={3} title="Format" disabled={!anyTrimDone}>
-          <FormatStep
+        )
+      case 'platform':
+        return (
+          <PlatformStep
+            activePreset={state.activePlatformPreset}
+            onPresetChange={handlePresetChange}
+            customWidth={state.customPresetWidth}
+            customHeight={state.customPresetHeight}
+            onCustomWidthChange={v => {
+              setState(prev => ({
+                ...prev,
+                customPresetWidth: v,
+                // Clear exports — they were encoded at the old custom dimensions
+                clips: prev.activePlatformPreset.id === 'custom'
+                  ? prev.clips.map(c => ({
+                      ...c, exportJobId: null, exportPresetId: null,
+                      exportStatus: 'idle' as Status, exportProgress: 0,
+                      exportError: null, exportUrl: null,
+                    }))
+                  : prev.clips,
+              }))
+            }}
+            onCustomHeightChange={v => {
+              setState(prev => ({
+                ...prev,
+                customPresetHeight: v,
+                clips: prev.activePlatformPreset.id === 'custom'
+                  ? prev.clips.map(c => ({
+                      ...c, exportJobId: null, exportPresetId: null,
+                      exportStatus: 'idle' as Status, exportProgress: 0,
+                      exportError: null, exportUrl: null,
+                    }))
+                  : prev.clips,
+              }))
+            }}
             videoFormat={state.videoFormat}
             onFormatChange={v => updateState({ videoFormat: v })}
+            standardBgColor={state.standardBgColor}
+            onStandardBgColorChange={v => updateState({ standardBgColor: v })}
             socialBgColor={state.socialBgColor}
             onSocialBgColorChange={v => updateState({ socialBgColor: v })}
             cinematicBgColor={state.cinematicBgColor}
             onCinematicBgColorChange={v => updateState({ cinematicBgColor: v })}
             videoBarHeight={state.videoBarHeight}
             onVideoBarHeightChange={v => updateState({ videoBarHeight: v })}
-            disabled={!anyTrimDone}
+            disabled={false}
           />
-        </StepCard>
-
-        <StepCard number={4} title="Subtitles" disabled={!anyTrimDone}>
+        )
+      case 'subtitles':
+        return (
           <SubtitlesStep
             clips={state.clips.filter(c => c.trimStatus === 'done')}
             activeClipId={state.activeClipId}
@@ -785,6 +1004,8 @@ export default function HomePage() {
             onAutoBoldChange={v => updateState({ subtitleBold: v })}
             autoOutlineWidth={state.subtitleOutlineWidth}
             onAutoOutlineWidthChange={v => updateState({ subtitleOutlineWidth: v })}
+            autoTextAlign={state.subtitleTextAlign}
+            onAutoTextAlignChange={v => updateState({ subtitleTextAlign: v })}
             customFontSize={state.customTextFontSize}
             onCustomFontSizeChange={v => updateState({ customTextFontSize: v })}
             customColor={state.customTextColor}
@@ -796,11 +1017,40 @@ export default function HomePage() {
             onCustomBoldChange={v => updateState({ customTextBold: v })}
             customOutlineWidth={state.customTextOutlineWidth}
             onCustomOutlineWidthChange={v => updateState({ customTextOutlineWidth: v })}
+            customTextAlign={state.customTextAlign}
+            onCustomTextAlignChange={v => updateState({ customTextAlign: v })}
+            onToggleCustom2={v => {
+              const id = state.activeClipId
+              if (!id) return
+              setState(prev => ({ ...prev, clips: prev.clips.map(c => c.id === id ? { ...c, custom2TextEnabled: v } : c) }))
+            }}
+            onCustom2LinesChange={lines => {
+              const id = state.activeClipId
+              if (!id) return
+              setState(prev => ({ ...prev, clips: prev.clips.map(c => c.id === id ? { ...c, custom2TextLines: lines } : c) }))
+            }}
+            custom2FontSize={state.custom2TextFontSize}
+            onCustom2FontSizeChange={v => updateState({ custom2TextFontSize: v })}
+            custom2Color={state.custom2TextColor}
+            onCustom2ColorChange={v => updateState({ custom2TextColor: v })}
+            custom2Position={state.custom2TextPosition}
+            custom2FontFamily={state.custom2TextFontFamily}
+            onCustom2FontFamilyChange={v => updateState({ custom2TextFontFamily: v })}
+            custom2Bold={state.custom2TextBold}
+            onCustom2BoldChange={v => updateState({ custom2TextBold: v })}
+            custom2OutlineWidth={state.custom2TextOutlineWidth}
+            onCustom2OutlineWidthChange={v => updateState({ custom2TextOutlineWidth: v })}
+            custom2TextAlign={state.custom2TextAlign}
+            onCustom2TextAlignChange={v => updateState({ custom2TextAlign: v })}
+            onAddEmoji={handleAddEmoji}
+            onRemoveEmoji={handleRemoveEmoji}
+            onEmojiSizeChange={handleEmojiSizeChange}
+            emojiStickers={activeClip?.emojiStickers ?? []}
             disabled={!anyTrimDone}
           />
-        </StepCard>
-
-        <StepCard number={5} title="Audio" disabled={!anyTrimDone}>
+        )
+      case 'voiceover':
+        return (
           <VoiceoverStep
             enabled={state.voiceoverEnabled}
             onToggle={v => updateState({ voiceoverEnabled: v })}
@@ -824,96 +1074,156 @@ export default function HomePage() {
             onBgMusicFadeOut={v => updateState({ bgMusicFadeOut: v })}
             disabled={!anyTrimDone}
           />
-        </StepCard>
-
-        <StepCard number={6} title="Overlay Image" disabled={!anyTrimDone}>
+        )
+      case 'overlay':
+        return (
           <OverlayStep
             enabled={state.overlayEnabled}
             onToggle={v => updateState({ overlayEnabled: v })}
             overlayFile={state.overlayFile}
             onOverlayFile={handleOverlayFile}
             previewUrl={state.overlayPreviewUrl}
-            overlayPosition={state.overlayPosition}
-            onPositionChange={v => updateState({ overlayPosition: v })}
+            overlayX={state.overlayX}
+            overlayY={state.overlayY}
+            onPositionChange={(x, y) => updateState({ overlayX: x, overlayY: y })}
             overlayScale={state.overlayScale}
             onScaleChange={v => updateState({ overlayScale: v })}
+            overlayRotation={state.overlayRotation}
+            onRotationChange={v => updateState({ overlayRotation: v })}
             disabled={!anyTrimDone}
           />
-        </StepCard>
-
-        <StepCard number={7} title="Export" disabled={!anyTrimDone}>
+        )
+      case 'export':
+        return (
           <ExportStep
             clips={state.clips}
             onExportClip={handleExportClip}
             onExportAll={handleExportAll}
             disabled={!anyTrimDone}
           />
-        </StepCard>
+        )
+    }
+  }
 
-          <p className="text-center text-xs text-zinc-700 pb-2">
-            Local tool — API binds to 127.0.0.1 only
-          </p>
-        </div>
-      </div>
-
-      {/* ── Resize handle (hidden in crop mode) ── */}
+  return (
+    <main className="flex flex-col h-screen overflow-hidden bg-zinc-950">
+      {/* ── Top bar (hidden in crop edit mode) ── */}
       {!state.cropEditClipId && (
-        <div
-          className="w-1 h-full bg-zinc-800 hover:bg-violet-600/60 transition-colors cursor-col-resize flex-shrink-0"
-          onMouseDown={e => { e.preventDefault(); isPanelDragging.current = true }}
+        <TopBar
+          activePreset={state.activePlatformPreset}
+          onPresetChange={handlePresetChange}
+          onExport={handleExportAll}
+          canExport={canExport}
         />
       )}
 
-      {/* ── Right: sticky preview panel ── */}
-      <div className="flex-1 bg-black overflow-hidden">
-        <PreviewPanel
-          videoUrl={previewVideoUrl}
-          sourceVideoUrl={state.sourceVideoUrl}
-          sourceVideoAR={state.sourceVideoAR}
-          cropEditClipId={state.cropEditClipId}
-          activeCropRect={activeCropRect}
-          onCropChange={crop => state.cropEditClipId && handleUpdateClipCrop(state.cropEditClipId, crop)}
-          onCropDone={() => updateState({ cropEditClipId: null, cropEditOriginalCrop: null })}
-          onCropCancel={handleCropCancel}
-          zoomSelectClipId={state.zoomSelectClipId}
-          onZoomPointSet={handleSetZoomPoint}
-          autoEnabled={activeClip?.subtitlesEnabled ?? false}
-          autoLines={activeClip?.subtitleLines ?? []}
-          autoStyle={{
-            fontSize: state.subtitleFontSize,
-            color: state.subtitleColor,
-            position: state.subtitlePosition,
-            fontFamily: state.subtitleFontFamily,
-            bold: state.subtitleBold,
-            outlineWidth: state.subtitleOutlineWidth,
-          }}
-          onAutoPositionChange={v => updateState({ subtitlePosition: v })}
-          customEnabled={activeClip?.customTextEnabled ?? false}
-          customLines={activeClip?.customTextLines ?? []}
-          customStyle={{
-            fontSize: state.customTextFontSize,
-            color: state.customTextColor,
-            position: state.customTextPosition,
-            fontFamily: state.customTextFontFamily,
-            bold: state.customTextBold,
-            outlineWidth: state.customTextOutlineWidth,
-          }}
-          onCustomPositionChange={v => updateState({ customTextPosition: v })}
-          activeLayer={state.activeSubtitleLayer}
-          overlayEnabled={state.overlayEnabled}
-          overlayPreviewUrl={state.overlayPreviewUrl}
-          overlayPosition={state.overlayPosition}
-          overlayScale={state.overlayScale}
-          videoFormat={state.videoFormat}
-          socialBgColor={state.socialBgColor}
-          socialVideoScale={state.socialVideoScale}
-          onSocialVideoScaleChange={v => updateState({ socialVideoScale: v })}
-          cinematicBgColor={state.cinematicBgColor}
-          videoBarHeight={state.videoBarHeight}
-          videoOffsetX={state.videoOffsetX}
-          videoOffsetY={state.videoOffsetY}
-          onVideoOffsetChange={(x, y) => updateState({ videoOffsetX: x, videoOffsetY: y })}
-        />
+      {/* ── 3-column body ── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* ── Sidebar (hidden in crop edit mode) ── */}
+        {!state.cropEditClipId && (
+          <Sidebar
+            activeStep={state.activeStep}
+            onStepChange={step => updateState({ activeStep: step })}
+            completedSteps={completedSteps}
+            lockedSteps={lockedSteps}
+            errorSteps={errorSteps}
+          />
+        )}
+
+        {/* ── Center: Preview ── */}
+        <div className="flex-1 bg-black overflow-hidden min-w-0">
+          <PreviewPanel
+            videoUrl={previewVideoUrl}
+            sourceVideoUrl={state.sourceVideoUrl}
+            sourceVideoAR={state.sourceVideoAR}
+            cropEditClipId={state.cropEditClipId}
+            activeCropRect={activeCropRect}
+            onCropChange={crop => state.cropEditClipId && handleUpdateClipCrop(state.cropEditClipId, crop)}
+            onCropDone={() => {
+              const clipId = state.cropEditClipId
+              const clip = state.clips.find(c => c.id === clipId)
+              const original = state.cropEditOriginalCrop
+              updateState({ cropEditClipId: null, cropEditOriginalCrop: null })
+              if (clipId && clip) {
+                const cropChanged = !original || clip.cropX !== original.x || clip.cropY !== original.y || clip.cropW !== original.w || clip.cropH !== original.h
+                if (cropChanged || clip.trimStatus !== 'done') handleTrimClip(clipId)
+              }
+            }}
+            onCropCancel={handleCropCancel}
+            zoomSelectClipId={state.zoomSelectClipId}
+            onZoomPointSet={handleSetZoomPoint}
+            autoEnabled={activeClip?.subtitlesEnabled ?? false}
+            autoLines={activeClip?.subtitleLines ?? []}
+            autoStyle={{
+              fontSize: state.subtitleFontSize,
+              color: state.subtitleColor,
+              position: state.subtitlePosition,
+              fontFamily: state.subtitleFontFamily,
+              bold: state.subtitleBold,
+              outlineWidth: state.subtitleOutlineWidth,
+              textAlign: state.subtitleTextAlign,
+            }}
+            onAutoPositionChange={v => updateState({ subtitlePosition: v })}
+            customEnabled={activeClip?.customTextEnabled ?? false}
+            customLines={activeClip?.customTextLines ?? []}
+            customStyle={{
+              fontSize: state.customTextFontSize,
+              color: state.customTextColor,
+              position: state.customTextPosition,
+              fontFamily: state.customTextFontFamily,
+              bold: state.customTextBold,
+              outlineWidth: state.customTextOutlineWidth,
+              textAlign: state.customTextAlign,
+            }}
+            onCustomPositionChange={v => updateState({ customTextPosition: v })}
+            custom2Enabled={activeClip?.custom2TextEnabled ?? false}
+            custom2Lines={activeClip?.custom2TextLines ?? []}
+            custom2Style={{
+              fontSize: state.custom2TextFontSize,
+              color: state.custom2TextColor,
+              position: state.custom2TextPosition,
+              fontFamily: state.custom2TextFontFamily,
+              bold: state.custom2TextBold,
+              outlineWidth: state.custom2TextOutlineWidth,
+              textAlign: state.custom2TextAlign,
+            }}
+            onCustom2PositionChange={v => updateState({ custom2TextPosition: v })}
+            emojiStickers={activeClip?.emojiStickers ?? []}
+            onEmojiMove={handleEmojiMove}
+            activeLayer={state.activeSubtitleLayer}
+            overlayEnabled={state.overlayEnabled}
+            overlayPreviewUrl={state.overlayPreviewUrl}
+            overlayX={state.overlayX}
+            overlayY={state.overlayY}
+            overlayRotation={state.overlayRotation}
+            overlayScale={state.overlayScale}
+            onOverlayMove={(x, y) => updateState({ overlayX: x, overlayY: y })}
+            videoFormat={state.videoFormat}
+            standardBgColor={state.standardBgColor}
+            socialBgColor={state.socialBgColor}
+            socialVideoScale={state.socialVideoScale}
+            onSocialVideoScaleChange={v => updateState({ socialVideoScale: v })}
+            cinematicBgColor={state.cinematicBgColor}
+            videoBarHeight={state.videoBarHeight}
+            videoOffsetX={state.videoOffsetX}
+            videoOffsetY={state.videoOffsetY}
+            onVideoOffsetChange={(x, y) => updateState({ videoOffsetX: x, videoOffsetY: y })}
+            presetWidth={outputWidth}
+            presetHeight={outputHeight}
+          />
+        </div>
+
+        {/* ── Right: Properties panel (hidden in crop edit mode) ── */}
+        {!state.cropEditClipId && (
+          <div className="w-80 flex-shrink-0 bg-zinc-950 border-l border-zinc-800 flex flex-col h-full overflow-hidden">
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {renderStepContent()}
+            </div>
+            <p className="text-center text-xs text-zinc-700 pb-2 flex-shrink-0">
+              Local tool — API binds to 127.0.0.1 only
+            </p>
+          </div>
+        )}
       </div>
     </main>
   )

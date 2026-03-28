@@ -56,6 +56,7 @@ router.post('/', (req, res) => {
     { name: 'voiceover', maxCount: 1 },
     { name: 'overlay', maxCount: 1 },
     { name: 'bgMusic', maxCount: 1 },
+    { name: 'emojiOverlay', maxCount: 1 },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ])(req, res as any, async (err: unknown) => {
     if (err) {
@@ -68,17 +69,22 @@ router.post('/', (req, res) => {
       subtitleStyle,
       customTextSubtitles,
       customTextSubtitleStyle,
+      custom2TextSubtitles,
+      custom2TextSubtitleStyle,
       voiceoverEnabled,
       overlayEnabled,
       bgMusicEnabled,
-      overlayPosition = 'bottom-right',
+      overlayX = '50',
+      overlayY = '50',
       overlayScale = '20',
+      overlayRotation = '0',
       originalVolume = '0.8',
       voiceoverVolume = '1.0',
       bgMusicVolume = '0.7',
       bgMusicFadeIn,
       bgMusicFadeOut,
       videoFormat = 'standard',
+      standardBgColor = '000000',
       socialBgColor = 'FFFFFF',
       socialVideoScale = '70',
       videoOffsetX = '0',
@@ -91,7 +97,23 @@ router.post('/', (req, res) => {
       zoomEnabled,
       zoomX,
       zoomY,
+      presetWidth = '1080',
+      presetHeight = '1920',
     } = req.body as Record<string, string>
+
+    const rawPresetWidth = parseInt(presetWidth)
+    const rawPresetHeight = parseInt(presetHeight)
+    if (isNaN(rawPresetWidth) || rawPresetWidth < 100 || rawPresetWidth > 7680) {
+      res.status(400).json({ error: 'Invalid presetWidth' })
+      return
+    }
+    if (isNaN(rawPresetHeight) || rawPresetHeight < 100 || rawPresetHeight > 7680) {
+      res.status(400).json({ error: 'Invalid presetHeight' })
+      return
+    }
+    // H.264/5 requires even dimensions
+    const outputWidth = rawPresetWidth % 2 === 0 ? rawPresetWidth : rawPresetWidth - 1
+    const outputHeight = rawPresetHeight % 2 === 0 ? rawPresetHeight : rawPresetHeight - 1
 
     // preJobId and preClipSuffix are validated before multer
     const importJobId = preJobId
@@ -106,6 +128,10 @@ router.post('/', (req, res) => {
     }
 
     const HEX6 = /^[0-9A-Fa-f]{6}$/
+    if (!HEX6.test(standardBgColor)) {
+      res.status(400).json({ error: 'Invalid standardBgColor.' })
+      return
+    }
     if (!HEX6.test(socialBgColor)) {
       res.status(400).json({ error: 'Invalid socialBgColor. Use a 6-digit hex value (e.g. FFFFFF).' })
       return
@@ -130,6 +156,7 @@ router.post('/', (req, res) => {
         fontFamily: p.fontFamily ?? defaults.fontFamily ?? 'Arial',
         bold: p.bold ?? defaults.bold ?? true,
         outlineWidth: p.outlineWidth ?? defaults.outlineWidth ?? 3,
+        textAlign: p.textAlign === 'left' ? 'left' : 'center',
       }
     }
 
@@ -144,7 +171,7 @@ router.post('/', (req, res) => {
           return
         }
         assPath = join(jobDir, `subtitles${sfx}.ass`)
-        writeFileSync(assPath, buildASSSubtitles(parsedSubs, style))
+        writeFileSync(assPath, buildASSSubtitles(parsedSubs, style, outputWidth, outputHeight))
       } catch (e) {
         if ((e as NodeJS.ErrnoException)?.code === undefined && res.headersSent) return
         console.error('Failed to build ASS subtitles:', e)
@@ -162,12 +189,32 @@ router.post('/', (req, res) => {
           return
         }
         customAssPath = join(jobDir, `customtext${sfx}.ass`)
-        writeFileSync(customAssPath, buildASSSubtitles(parsedSubs, style))
+        writeFileSync(customAssPath, buildASSSubtitles(parsedSubs, style, outputWidth, outputHeight))
       } catch (e) {
         if ((e as NodeJS.ErrnoException)?.code === undefined && res.headersSent) return
         console.error('Failed to build custom text ASS:', e)
       }
     }
+
+    // Build ASS file for custom text 2 layer
+    let customAss2Path: string | undefined
+    if (custom2TextSubtitles) {
+      try {
+        const parsedSubs: SubtitleLine[] = JSON.parse(custom2TextSubtitles)
+        const style = parseStyle(custom2TextSubtitleStyle, { color: 'FF0000', position: { x: 50, y: 30 } })
+        if (!/^[0-9A-Fa-f]{6}$/.test(style.color)) {
+          res.status(400).json({ error: 'Invalid custom text 2 color.' })
+          return
+        }
+        customAss2Path = join(jobDir, `customtext2${sfx}.ass`)
+        writeFileSync(customAss2Path, buildASSSubtitles(parsedSubs, style, outputWidth, outputHeight))
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException)?.code === undefined && res.headersSent) return
+        console.error('Failed to build custom text 2 ASS:', e)
+      }
+    }
+
+    const emojiOverlayFile = (files['emojiOverlay']?.[0]?.path) as string | undefined
 
     const opJobId = jobManager.createJob()
     res.json({ jobId: opJobId })
@@ -176,18 +223,13 @@ router.post('/', (req, res) => {
       try {
         jobManager.sendProgress(opJobId, { type: 'progress', stage: 'exporting', percent: 0 })
 
-        const overlayPos = overlayPosition as
-          | 'top-left'
-          | 'top-right'
-          | 'bottom-left'
-          | 'bottom-right'
-          | 'center'
-
         const args = buildExportArgs({
           inputVideo: trimmedPath,
           outputVideo: finalPath,
           subtitlesFile: assPath,
           customTextFile: customAssPath,
+          customText2File: customAss2Path,
+          emojiOverlayFile,
           voiceoverFile,
           originalVolume: parseFloat(originalVolume) || 0.8,
           voiceoverVolume: parseFloat(voiceoverVolume) || 1.0,
@@ -196,9 +238,12 @@ router.post('/', (req, res) => {
           bgMusicFadeIn: bgMusicFadeIn === 'true',
           bgMusicFadeOut: bgMusicFadeOut === 'true',
           overlayImage: overlayFile,
-          overlayPosition: overlayPos,
-          overlayScale: parseInt(overlayScale) || 20,
+          overlayX: Math.max(0, Math.min(100, parseFloat(overlayX) || 50)),
+          overlayY: Math.max(0, Math.min(100, parseFloat(overlayY) || 50)),
+          overlayScale: Math.max(1, Math.min(100, parseInt(overlayScale) || 20)),
+          overlayRotation: ((parseFloat(overlayRotation) || 0) % 360 + 360) % 360,
           videoFormat: (['social-post', 'cinematic', 'blur-bg'].includes(videoFormat) ? videoFormat : 'standard') as 'standard' | 'social-post' | 'cinematic' | 'blur-bg',
+          standardBgColor,
           socialBgColor,
           socialVideoScale: parseInt(socialVideoScale) || 70,
           videoOffsetX: parseFloat(videoOffsetX) || 0,
@@ -211,6 +256,8 @@ router.post('/', (req, res) => {
           zoomEnabled: zoomEnabled === 'true',
           zoomX: zoomX ? parseFloat(zoomX) : 50,
           zoomY: zoomY ? parseFloat(zoomY) : 50,
+          outputWidth,
+          outputHeight,
         })
 
         let totalDuration: number | null = null

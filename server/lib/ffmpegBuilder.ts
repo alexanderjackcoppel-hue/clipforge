@@ -3,6 +3,8 @@ export interface ExportOptions {
   outputVideo: string     // final.mp4 path
   subtitlesFile?: string  // .ass file path — auto-generated layer
   customTextFile?: string // .ass file path — custom text layer
+  emojiOverlayFile?: string
+  customText2File?: string
   voiceoverFile?: string  // audio file path
   originalVolume: number  // 0-1
   voiceoverVolume: number // 0-1
@@ -11,9 +13,12 @@ export interface ExportOptions {
   bgMusicFadeIn?: boolean
   bgMusicFadeOut?: boolean
   overlayImage?: string   // image file path
-  overlayPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
+  overlayX: number        // 0-100 (center X as % of frame width)
+  overlayY: number        // 0-100 (center Y as % of frame height)
   overlayScale: number    // 1-100 (percent of frame width)
+  overlayRotation: number // 0-359 degrees
   videoFormat?: 'standard' | 'social-post' | 'cinematic' | 'blur-bg'
+  standardBgColor?: string // 6-char hex for standard (Regular) format pad color
   socialBgColor?: string  // 6-char hex like 'FFFFFF'
   socialVideoScale?: number // 40-95 (% of frame height the video occupies)
   videoOffsetX?: number   // -45 to 45 (% of frame width)
@@ -27,6 +32,9 @@ export interface ExportOptions {
   zoomEnabled?: boolean   // slow zoom-in toward zoomX,zoomY over clip duration
   zoomX?: number          // 0-100 percent of frame width (zoom target)
   zoomY?: number          // 0-100 percent of frame height (zoom target)
+  // Output resolution (defaults to 1080x1920 for backwards compatibility)
+  outputWidth?: number    // pixels — must be even
+  outputHeight?: number   // pixels — must be even
 }
 
 export function buildExportArgs(opts: ExportOptions): string[] {
@@ -39,6 +47,11 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   if (opts.overlayImage) {
     overlayIdx = nextInputIdx++
     inputs.push('-i', opts.overlayImage)
+  }
+  let emojiOverlayIdx: number | null = null
+  if (opts.emojiOverlayFile) {
+    emojiOverlayIdx = nextInputIdx++
+    inputs.push('-i', opts.emojiOverlayFile)
   }
   if (opts.voiceoverFile) {
     voiceoverIdx = nextInputIdx++
@@ -53,50 +66,58 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   const filterParts: string[] = []
   let lastVideoLabel = '[sv]'
 
-  // Base scale/crop to 1080x1920, with optional format transform
+  // Output dimensions — default to 1080x1920 for backwards compatibility
+  const outW = opts.outputWidth ?? 1080
+  const outH = opts.outputHeight ?? 1920
+
+  // Base scale/crop to outW×outH, with optional format transform
   const fmt   = opts.videoFormat ?? 'standard'
   const scale = Math.max(20, Math.min(150, opts.socialVideoScale ?? 70)) / 100
   const bgHex = (opts.socialBgColor ?? 'FFFFFF').replace('#', '')
-  const offXpx = Math.round(((opts.videoOffsetX ?? 0) / 100) * 1080)
-  const offYpx = Math.round(((opts.videoOffsetY ?? 0) / 100) * 1920)
+  const offXpx = Math.round(((opts.videoOffsetX ?? 0) / 100) * outW)
+  const offYpx = Math.round(((opts.videoOffsetY ?? 0) / 100) * outH)
   const overlayExpr = `(W-w)/2+${offXpx}:(H-h)/2+${offYpx}`
 
   if (fmt === 'social-post') {
     // Scale down, pad with solid background, then overlay at offset position
     filterParts.push(
-      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,` +
+      `[0:v]scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},` +
       `scale=round(iw*${scale}/2)*2:round(ih*${scale}/2)*2[vsmall];` +
-      `color=c=0x${bgHex}:size=1080x1920:r=30000/1001,format=yuv420p[bg];` +
+      `color=c=0x${bgHex}:size=${outW}x${outH}:r=30000/1001,format=yuv420p[bg];` +
       `[bg][vsmall]overlay=${overlayExpr}[sv]`
     )
   } else if (fmt === 'cinematic') {
-    // Cover full frame, overlay solid colored bars top/bottom (same structure as blur-bg)
+    // Fit video within frame (no crop), pad with bar color, then draw solid bars on top/bottom
     const rawBarH = Math.max(5, Math.min(45, opts.videoBarHeight ?? 34))
-    const barPx   = Math.round((rawBarH / 100) * 1920)
-    const cinBg = `0x${(opts.cinematicBgColor ?? '000000').replace('#', '')}`
+    const barPx   = Math.round((rawBarH / 100) * outH)
+    const cinBgHex = (opts.cinematicBgColor ?? '000000').replace('#', '')
+    const cinBg = `0x${cinBgHex}`
     filterParts.push(
-      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,` +
-      `drawbox=x=0:y=0:w=1080:h=${barPx}:color=${cinBg}@1.0:t=fill,` +
-      `drawbox=x=0:y=${1920 - barPx}:w=1080:h=${barPx}:color=${cinBg}@1.0:t=fill[sv]`
+      `[0:v]scale=${outW}:${outH}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
+      `pad=${outW}:${outH}:(ow-iw)/2:(oh-ih)/2:color=${cinBg},format=yuv420p,` +
+      `drawbox=x=0:y=0:w=${outW}:h=${barPx}:color=${cinBgHex}@1.0:t=fill,` +
+      `drawbox=x=0:y=${outH - barPx}:w=${outW}:h=${barPx}:color=${cinBgHex}@1.0:t=fill[sv]`
     )
   } else if (fmt === 'blur-bg') {
-    // Split: blurred background fills frame, crisp center video sits over it
+    // Background: blurred + zoomed to fill frame (crop ok — it's blurred anyway)
+    // Foreground: crisp video fitted without crop into center region
     const rawBarH = Math.max(5, Math.min(45, opts.videoBarHeight ?? 34))
-    const barPx   = Math.round((rawBarH / 100) * 1920)
-    const vidH    = 1920 - 2 * barPx
+    const barPx   = Math.round((rawBarH / 100) * outH)
+    const vidH    = outH - 2 * barPx
     const vidHEven = vidH % 2 === 0 ? vidH : vidH - 1
-    const barPxFinal = (1920 - vidHEven) / 2
+    const barPxFinal = (outH - vidHEven) / 2
     filterParts.push(
-      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p,split=2[raw1][raw2];` +
-      `[raw1]scale=270:480,boxblur=5:2,scale=1080:1920[bg];` +
-      `[raw2]scale=w=1080:h=${vidHEven}:force_original_aspect_ratio=decrease,` +
-      `pad=1080:${vidHEven}:(ow-iw)/2:(oh-ih)/2,format=yuv420p[fg];` +
+      `[0:v]split=2[raw1][raw2];` +
+      `[raw1]scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},scale=trunc(iw/4)*2:trunc(ih/4)*2,boxblur=5:2,scale=${outW}:${outH},format=yuv420p[bg];` +
+      `[raw2]scale=w=${outW}:h=${vidHEven}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
+      `pad=${outW}:${vidHEven}:(ow-iw)/2:(oh-ih)/2,format=yuv420p[fg];` +
       `[bg][fg]overlay=(W-w)/2:${barPxFinal}[sv]`
     )
   } else {
-    // standard: full bleed
+    // standard (Regular): fit within outW×outH with configurable padding color, no distortion
+    const stdBg = `0x${(opts.standardBgColor ?? '000000').replace('#', '')}`
     filterParts.push(
-      `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[sv]`
+      `[0:v]scale=${outW}:${outH}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${outW}:${outH}:(ow-iw)/2:(oh-ih)/2:color=${stdBg},format=yuv420p[sv]`
     )
   }
 
@@ -114,38 +135,61 @@ export function buildExportArgs(opts: ExportOptions): string[] {
       `z='min(1.5,1+on/${fps}*${zoomRate})':` +
       `x='max(0,min(iw-iw/zoom,iw*${zx.toFixed(4)}-iw/zoom/2))':` +
       `y='max(0,min(ih-ih/zoom,ih*${zy.toFixed(4)}-ih/zoom/2))':` +
-      `d=${frames}:fps=${fps}:s=1080x1920[svz]`
+      `d=${frames}:fps=${fps}:s=${outW}x${outH}[svz]`
     )
     lastVideoLabel = '[svz]'
   }
 
   // Overlay image
   if (overlayIdx !== null) {
-    const pos = getOverlayPosition(opts.overlayPosition)
     const scale = Math.max(1, Math.min(100, opts.overlayScale))
-    const overlayWidth = Math.round(1080 * scale / 100)
-    filterParts.push(`[${overlayIdx}:v]scale=${overlayWidth}:-1[ol]`)
-    filterParts.push(`${lastVideoLabel}[ol]overlay=${pos}[ov]`)
+    const overlayWidth = Math.round(outW * scale / 100)
+    const angle = ((opts.overlayRotation ?? 0) % 360 + 360) % 360
+    // center-based position: x = W*(x%/100) - w/2, y = H*(y%/100) - h/2
+    const px = (opts.overlayX ?? 50).toFixed(4)
+    const py = (opts.overlayY ?? 50).toFixed(4)
+    const posExpr = `x=W*${px}/100-w/2:y=H*${py}/100-h/2`
+    if (angle !== 0) {
+      // rotate expands bounding box, transparent fill for PNG alpha
+      const rad = (angle * Math.PI / 180).toFixed(6)
+      filterParts.push(`[${overlayIdx}:v]scale=${overlayWidth}:-1,rotate=${rad}:ow=rotw(${rad}):oh=roth(${rad}):c=none[ol]`)
+    } else {
+      filterParts.push(`[${overlayIdx}:v]scale=${overlayWidth}:-1[ol]`)
+    }
+    filterParts.push(`${lastVideoLabel}[ol]overlay=${posExpr}[ov]`)
     lastVideoLabel = '[ov]'
+  }
+
+  // Emoji overlay (full-frame transparent PNG)
+  if (emojiOverlayIdx !== null) {
+    filterParts.push(`${lastVideoLabel}[${emojiOverlayIdx}:v]overlay=0:0:format=auto[ov_emoji]`)
+    lastVideoLabel = '[ov_emoji]'
   }
 
   // Subtitle layers — burned sequentially
   const escASSPath = (p: string) => p.replace(/\\/g, '\\\\').replace(/:/g, '\\:')
 
-  if (opts.subtitlesFile) {
-    const nextLabel = opts.customTextFile ? '[v_auto]' : '[vout]'
-    filterParts.push(`${lastVideoLabel}ass=${escASSPath(opts.subtitlesFile)}${nextLabel}`)
-    lastVideoLabel = nextLabel
-  }
-
-  if (opts.customTextFile) {
-    filterParts.push(`${lastVideoLabel}ass=${escASSPath(opts.customTextFile)}[vout]`)
-    lastVideoLabel = '[vout]'
-  }
-
-  if (!opts.subtitlesFile && !opts.customTextFile) {
+  const hasSubtitleLayers = opts.subtitlesFile || opts.customTextFile || opts.customText2File
+  if (!hasSubtitleLayers) {
     filterParts.push(`${lastVideoLabel}null[vout]`)
     lastVideoLabel = '[vout]'
+  } else {
+    if (opts.subtitlesFile) {
+      const more = opts.customTextFile || opts.customText2File
+      const nextLabel = more ? '[v_s0]' : '[vout]'
+      filterParts.push(`${lastVideoLabel}ass=${escASSPath(opts.subtitlesFile)}${nextLabel}`)
+      lastVideoLabel = nextLabel
+    }
+    if (opts.customTextFile) {
+      const more = opts.customText2File
+      const nextLabel = more ? '[v_s1]' : '[vout]'
+      filterParts.push(`${lastVideoLabel}ass=${escASSPath(opts.customTextFile)}${nextLabel}`)
+      lastVideoLabel = nextLabel
+    }
+    if (opts.customText2File) {
+      filterParts.push(`${lastVideoLabel}ass=${escASSPath(opts.customText2File)}[vout]`)
+      lastVideoLabel = '[vout]'
+    }
   }
 
   // Video fade (applied after subtitle burn, before final map)
@@ -232,15 +276,6 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   return args
 }
 
-function getOverlayPosition(pos: ExportOptions['overlayPosition']): string {
-  switch (pos) {
-    case 'top-left':     return '20:20'
-    case 'top-right':    return 'W-w-20:20'
-    case 'bottom-left':  return '20:H-h-20'
-    case 'bottom-right': return 'W-w-20:H-h-20'
-    case 'center':       return '(W-w)/2:(H-h)/2'
-  }
-}
 
 export function buildTrimArgs(opts: {
   inputVideo: string
@@ -260,8 +295,10 @@ export function buildTrimArgs(opts: {
     const ch = Math.max(1, Math.min(100, h)) / 100
     vfParts.push(`crop=iw*${cw.toFixed(4)}:ih*${ch.toFixed(4)}:iw*${cx.toFixed(4)}:ih*${cy.toFixed(4)}`)
   }
-
-  vfParts.push('scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920')
+  // Snap to even pixel dimensions (H.264 requires even width/height) and ensure yuv420p.
+  // Preserve source resolution — the export step handles final scaling to the preset dimensions.
+  vfParts.push(`scale=trunc(iw/2)*2:trunc(ih/2)*2`)
+  vfParts.push(`format=yuv420p`)
 
   return [
     '-i', opts.inputVideo,
@@ -302,22 +339,29 @@ export interface SubtitleStyle {
   fontFamily: string    // e.g. 'Arial', 'Impact'
   bold: boolean
   outlineWidth: number  // 0-8 pixels
+  textAlign?: 'center' | 'left'  // default: 'center'
 }
 
-export function buildASSSubtitles(lines: SubtitleLine[], style: SubtitleStyle): string {
-  // Convert percentage position to pixel coordinates on 1080x1920 canvas
-  const xPx = Math.round((style.position.x / 100) * 1080)
-  const yPx = Math.round((style.position.y / 100) * 1920)
-  // \an5 = center anchor; \pos(x,y) = absolute pixel position
-  const posTag = `{\\an5\\pos(${xPx},${yPx})}`
+export function buildASSSubtitles(
+  lines: SubtitleLine[],
+  style: SubtitleStyle,
+  outputWidth = 1080,
+  outputHeight = 1920,
+): string {
+  // Convert percentage position to pixel coordinates on the output canvas
+  const xPx = Math.round((style.position.x / 100) * outputWidth)
+  const yPx = Math.round((style.position.y / 100) * outputHeight)
+  // \an5 = center anchor, \an4 = left anchor; \pos(x,y) = absolute pixel position
+  const an = style.textAlign === 'left' ? 4 : 5
+  const posTag = `{\\an${an}\\pos(${xPx},${yPx})}`
 
   const boldFlag = style.bold ? 1 : 0
   const outline = Math.max(0, Math.min(8, style.outlineWidth))
 
   const header = `[Script Info]
 ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
+PlayResX: ${outputWidth}
+PlayResY: ${outputHeight}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
