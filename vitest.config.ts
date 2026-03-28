@@ -5,7 +5,7 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts'],
     environmentMatchGlobs: [
-      ['tests/**/*.hook.test.ts', 'jsdom'],
+      ['tests/**/*.hook.test.ts', 'happy-dom'],
     ],
   },
 })
