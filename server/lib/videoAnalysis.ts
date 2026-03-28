@@ -15,6 +15,9 @@ export interface VideoAnalysis {
   highlights: VideoHighlight[]
   suggestedTitle: string | null
   suggestedDescription: string | null
+  funnyText: string | null
+  caption: string | null
+  hashtags: string[]
   transcript: string | null
   frameCount: number
 }
@@ -121,7 +124,7 @@ async function analyseWithClaude(
 
   const secsPerFrame = (duration / validFrames.length).toFixed(1)
 
-  const systemPrompt = `You are a video content analyst. You are shown ${validFrames.length} evenly-spaced frames from a ${duration.toFixed(0)}-second video (one frame every ~${secsPerFrame}s). Analyse the content and return ONLY a JSON object with this structure:
+  const systemPrompt = `You are a video content analyst and social media expert. You are shown ${validFrames.length} evenly-spaced frames from a ${duration.toFixed(0)}-second video (one frame every ~${secsPerFrame}s). Analyse the content and return ONLY a JSON object with this structure:
 {
   "summary": "2-3 sentence description of what the video shows",
   "mood": "one word from: energetic, calm, funny, dramatic, informative, inspiring, suspenseful, emotional",
@@ -129,7 +132,10 @@ async function analyseWithClaude(
     { "time": <seconds as a number>, "description": "<what happens at this moment>" }
   ],
   "suggestedTitle": "<catchy short title or null>",
-  "suggestedDescription": "<1-2 sentence social media caption or null>"
+  "suggestedDescription": "<1-2 sentence social media caption or null>",
+  "funnyText": "<a short, witty, funny text overlay suggestion for this clip — punchy, relatable, could go on screen. Max 8 words. Something genuinely funny that fits the moment, not generic. null if the content is too serious for humour>",
+  "caption": "<an engaging, conversational social media caption 1-3 sentences. Write as if you ARE the creator posting this. First-person or direct-address tone. Include a hook. No hashtags here.>",
+  "hashtags": ["<tag1>", "<tag2>", ...] // 5-10 highly relevant AND currently popular hashtags for this content. No # prefix. Mix niche-specific and broad trending ones.
 }
 Include 1-5 highlights at interesting moments. Estimate timestamp as frame N ≈ N × ${secsPerFrame}s. Return ONLY valid JSON.`
 
@@ -176,6 +182,11 @@ Include 1-5 highlights at interesting moments. Estimate timestamp as frame N ≈
         : [],
       suggestedTitle: result.suggestedTitle ? String(result.suggestedTitle).slice(0, 100) : null,
       suggestedDescription: result.suggestedDescription ? String(result.suggestedDescription).slice(0, 300) : null,
+      funnyText: result.funnyText ? String(result.funnyText).slice(0, 120) : null,
+      caption: result.caption ? String(result.caption).slice(0, 500) : null,
+      hashtags: Array.isArray(result.hashtags)
+        ? result.hashtags.slice(0, 15).map((h: unknown) => String(h).replace(/^#/, '').replace(/\s+/g, ''))
+        : [],
       transcript,
       frameCount: validFrames.length,
     }
@@ -186,6 +197,9 @@ Include 1-5 highlights at interesting moments. Estimate timestamp as frame N ≈
       highlights: [],
       suggestedTitle: null,
       suggestedDescription: null,
+      funnyText: null,
+      caption: null,
+      hashtags: [],
       transcript,
       frameCount: validFrames.length,
     }
