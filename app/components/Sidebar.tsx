@@ -46,7 +46,7 @@ export default function Sidebar({
               disabled={isLocked}
               aria-current={isActive ? 'step' : undefined}
               onClick={() => !isLocked && onStepChange(step.id)}
-              className={`relative w-full flex items-center gap-2.5 px-3.5 py-2 text-sm font-medium transition-colors duration-150 ${
+              className={`relative w-full flex items-center gap-2.5 px-3.5 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 focus-visible:ring-inset ${
                 isLocked
                   ? 'opacity-35 cursor-not-allowed text-zinc-500'
                   : isActive
@@ -92,7 +92,7 @@ export default function Sidebar({
           type="button"
           aria-current={activeStep === 'export' ? 'step' : undefined}
           onClick={() => onStepChange('export')}
-          className={`w-full text-left text-xs font-medium transition-colors duration-150 py-1 ${
+          className={`w-full text-left text-xs font-medium transition-colors duration-150 py-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 focus-visible:ring-inset ${
             activeStep === 'export' ? 'text-violet-400' : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >

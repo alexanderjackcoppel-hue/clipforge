@@ -88,7 +88,7 @@ export default function PlatformStep({
                       role="radio"
                       aria-checked={isActive}
                       onClick={() => onPresetChange(preset)}
-                      className={`flex flex-col items-start p-2 rounded-lg border text-left transition-all duration-150 ${
+                      className={`flex flex-col items-start p-2 rounded-lg border text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 ${
                         isActive
                           ? 'border-violet-500 bg-violet-600/10'
                           : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'

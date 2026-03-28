@@ -52,7 +52,7 @@ export default function TopBar({ activePreset, onPresetChange, onExport, canExpo
           onClick={() => setOpen(v => !v)}
           aria-haspopup="listbox"
           aria-expanded={open}
-          className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-violet-500 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-100 transition-colors duration-150"
+          className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-violet-500 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-100 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
         >
           {activePreset.name}
           <span className="font-mono text-xs text-zinc-400">{activePreset.aspectLabel} · {displayWidth ?? activePreset.width}×{displayHeight ?? activePreset.height}</span>
@@ -85,7 +85,7 @@ export default function TopBar({ activePreset, onPresetChange, onExport, canExpo
                       aria-selected={isActive}
                       type="button"
                       onClick={() => { onPresetChange(preset); setOpen(false) }}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors duration-100 ${
+                      className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors duration-100 focus-visible:outline-none focus-visible:bg-zinc-800 ${
                         isActive
                           ? 'bg-violet-600/15 text-violet-300'
                           : 'text-zinc-300 hover:bg-zinc-800'
@@ -115,7 +115,7 @@ export default function TopBar({ activePreset, onPresetChange, onExport, canExpo
           canExport
             ? 'bg-violet-600 hover:bg-violet-500 text-white'
             : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
-        }`}
+        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-900`}
       >
         Export
       </button>
