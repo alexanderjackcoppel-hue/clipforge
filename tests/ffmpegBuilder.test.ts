@@ -155,6 +155,15 @@ describe('buildExportArgs', () => {
     // Should contain null filter passthrough, not a bare label rename
     expect(fc).toContain('null[vout]')
   })
+
+  it('non-default outputWidth/outputHeight appear in filter_complex scale', () => {
+    const args = buildExportArgs({ ...base, outputWidth: 1280, outputHeight: 720 })
+    const fc = args[args.indexOf('-filter_complex') + 1]
+    expect(fc).toContain('1280')
+    expect(fc).toContain('720')
+    // Default 1080x1920 should NOT appear since we overrode both dimensions
+    expect(fc).not.toContain('1920')
+  })
 })
 
 // ─── buildASSSubtitles ───────────────────────────────────────────────────────
