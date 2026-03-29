@@ -18,7 +18,7 @@ import { PLATFORM_PRESETS, DEFAULT_PRESET } from '../lib/platformPresets'
 import type { PlatformPreset } from '../lib/platformPresets'
 import { useJobProgress } from '../hooks/useJobProgress'
 import { useMultiJobProgress } from '../hooks/useMultiJobProgress'
-import { downloadVideo, trimVideo, transcribeVideo, exportVideo } from '../lib/api'
+import { downloadVideo, trimVideo, transcribeVideo, exportVideo, detectSilence } from '../lib/api'
 import type { ProgressEvent } from '../hooks/useJobProgress'
 
 type Status = 'idle' | 'loading' | 'done' | 'error'
@@ -57,6 +57,12 @@ export interface Clip {
   zoomEnabled: boolean
   zoomX: number   // 0-100 percent of frame width
   zoomY: number   // 0-100 percent of frame height
+  // Per-clip video effects
+  speed: number           // 0.25 | 0.5 | 1.0 | 1.5 | 2.0
+  flipH: boolean          // horizontal mirror
+  flipV: boolean          // vertical flip
+  colorPreset: string     // '' | 'warm' | 'cool' | 'vivid' | 'cinematic' | 'bw' | 'faded' | 'night'
+  reversed: boolean       // play backwards
   trimJobId: string | null
   trimStatus: Status
   trimProgress: number
@@ -105,6 +111,19 @@ interface AppState {
   bgMusicVolume: number
   bgMusicFadeIn: boolean
   bgMusicFadeOut: boolean
+  audioDuckEnabled: boolean
+  audioDuckVolume: number
+
+  // Lower thirds (per-export, shared)
+  lowerThirdEnabled: boolean
+  lowerThirdName: string
+  lowerThirdSubtitle: string
+  lowerThirdTemplate: 'clean-line' | 'dark-chip' | 'broadcast'
+  lowerThirdDuration: number
+
+  // Preview UI toggles
+  showOriginal: boolean
+  showGrid: boolean
 
   // Shared auto-subtitle style
   subtitlesEnabled: boolean      // default for new clips
@@ -185,6 +204,11 @@ function makeClip(startSecs: number, endSecs: number, index: number): Clip {
     zoomEnabled: false,
     zoomX: 50,
     zoomY: 50,
+    speed: 1.0,
+    flipH: false,
+    flipV: false,
+    colorPreset: '',
+    reversed: false,
     trimJobId: null,
     trimStatus: 'idle',
     trimProgress: 0,
@@ -237,6 +261,17 @@ const initialState: AppState = {
   bgMusicVolume: 0.7,
   bgMusicFadeIn: false,
   bgMusicFadeOut: false,
+  audioDuckEnabled: false,
+  audioDuckVolume: 0.3,
+
+  lowerThirdEnabled: false,
+  lowerThirdName: '',
+  lowerThirdSubtitle: '',
+  lowerThirdTemplate: 'dark-chip',
+  lowerThirdDuration: 5,
+
+  showOriginal: false,
+  showGrid: false,
 
   subtitlesEnabled: false,
   subtitleFontSize: 48,
@@ -546,6 +581,54 @@ export default function HomePage() {
     }))
   }, [])
 
+  const handleUpdateClipSpeed = useCallback((clipId: string, speed: number) => {
+    setState(prev => ({
+      ...prev,
+      clips: prev.clips.map(c => c.id === clipId ? { ...c, speed } : c),
+    }))
+  }, [])
+
+  const handleToggleClipFlip = useCallback((clipId: string, axis: 'flipH' | 'flipV', value: boolean) => {
+    setState(prev => ({
+      ...prev,
+      clips: prev.clips.map(c => c.id === clipId ? { ...c, [axis]: value } : c),
+    }))
+  }, [])
+
+  const handleUpdateClipColorPreset = useCallback((clipId: string, colorPreset: string) => {
+    setState(prev => ({
+      ...prev,
+      clips: prev.clips.map(c => c.id === clipId ? { ...c, colorPreset } : c),
+    }))
+  }, [])
+
+  const handleToggleClipReverse = useCallback((clipId: string, value: boolean) => {
+    setState(prev => ({
+      ...prev,
+      clips: prev.clips.map(c => c.id === clipId ? { ...c, reversed: value } : c),
+    }))
+  }, [])
+
+  const handleReorderClips = useCallback((fromIdx: number, toIdx: number) => {
+    pushHistory()
+    setState(prev => {
+      const clips = [...prev.clips]
+      const [moved] = clips.splice(fromIdx, 1)
+      clips.splice(toIdx, 0, moved)
+      return { ...prev, clips }
+    })
+  }, [pushHistory])
+
+  const handleDetectSilence = useCallback(async (clipId: string) => {
+    const clip = state.clips.find(c => c.id === clipId)
+    if (!clip?.trimJobId || !state.importJobId) return
+    try {
+      return await detectSilence(state.importJobId, clip.clipSuffix)
+    } catch {
+      return null
+    }
+  }, [state.clips, state.importJobId])
+
   const handleSetZoomPoint = useCallback((x: number, y: number) => {
     setState(prev => {
       const clipId = prev.zoomSelectClipId
@@ -770,6 +853,18 @@ export default function HomePage() {
         zoomEnabled: clip.zoomEnabled,
         zoomX: clip.zoomX,
         zoomY: clip.zoomY,
+        speed: clip.speed,
+        flipH: clip.flipH,
+        flipV: clip.flipV,
+        colorPreset: clip.colorPreset || undefined,
+        reversed: clip.reversed || undefined,
+        audioDuckEnabled: state.audioDuckEnabled || undefined,
+        audioDuckVolume: state.audioDuckVolume,
+        lowerThirdEnabled: state.lowerThirdEnabled || undefined,
+        lowerThirdName: state.lowerThirdName || undefined,
+        lowerThirdSubtitle: state.lowerThirdSubtitle || undefined,
+        lowerThirdTemplate: state.lowerThirdTemplate,
+        lowerThirdDuration: state.lowerThirdDuration,
         presetWidth,
         presetHeight,
       })
@@ -918,6 +1013,13 @@ export default function HomePage() {
             onEndCropEdit={handleEndCropEdit}
             onSourceVideoAR={handleSetSourceVideoAR}
             sourceVideoUrl={state.sourceVideoUrl}
+            onUpdateClipSpeed={handleUpdateClipSpeed}
+            onToggleClipFlip={handleToggleClipFlip}
+            onUpdateClipColorPreset={handleUpdateClipColorPreset}
+            onToggleClipReverse={handleToggleClipReverse}
+            onReorderClips={handleReorderClips}
+            onDetectSilence={handleDetectSilence}
+            importJobId={state.importJobId}
             disabled={state.importStatus !== 'done'}
           />
         )
@@ -1076,6 +1178,20 @@ export default function HomePage() {
             onBgMusicFadeIn={v => updateState({ bgMusicFadeIn: v })}
             bgMusicFadeOut={state.bgMusicFadeOut}
             onBgMusicFadeOut={v => updateState({ bgMusicFadeOut: v })}
+            audioDuckEnabled={state.audioDuckEnabled}
+            onAudioDuckToggle={v => updateState({ audioDuckEnabled: v })}
+            audioDuckVolume={state.audioDuckVolume}
+            onAudioDuckVolume={v => updateState({ audioDuckVolume: v })}
+            lowerThirdEnabled={state.lowerThirdEnabled}
+            onLowerThirdToggle={v => updateState({ lowerThirdEnabled: v })}
+            lowerThirdName={state.lowerThirdName}
+            onLowerThirdNameChange={v => updateState({ lowerThirdName: v })}
+            lowerThirdSubtitle={state.lowerThirdSubtitle}
+            onLowerThirdSubtitleChange={v => updateState({ lowerThirdSubtitle: v })}
+            lowerThirdTemplate={state.lowerThirdTemplate}
+            onLowerThirdTemplateChange={v => updateState({ lowerThirdTemplate: v })}
+            lowerThirdDuration={state.lowerThirdDuration}
+            onLowerThirdDurationChange={v => updateState({ lowerThirdDuration: v })}
             disabled={!anyTrimDone}
           />
         )
@@ -1120,6 +1236,157 @@ export default function HomePage() {
           canExport={canExport}
           displayWidth={outputWidth}
           displayHeight={outputHeight}
+          onSaveProject={() => {
+            // Serialize state excluding File objects and transient states
+            const toSave = {
+              version: 1,
+              importJobId: state.importJobId,
+              clips: state.clips.map(c => ({
+                ...c,
+                // Clear transient/non-serializable fields
+                trimProgress: 0,
+                exportProgress: 0,
+                // Keep IDs and config, clear URLs that won't survive server restart
+              })),
+              activeClipId: state.activeClipId,
+              subtitleFontSize: state.subtitleFontSize,
+              subtitleColor: state.subtitleColor,
+              subtitlePosition: state.subtitlePosition,
+              subtitleFontFamily: state.subtitleFontFamily,
+              subtitleBold: state.subtitleBold,
+              subtitleOutlineWidth: state.subtitleOutlineWidth,
+              subtitleTextAlign: state.subtitleTextAlign,
+              customTextFontSize: state.customTextFontSize,
+              customTextColor: state.customTextColor,
+              customTextPosition: state.customTextPosition,
+              customTextFontFamily: state.customTextFontFamily,
+              customTextBold: state.customTextBold,
+              customTextOutlineWidth: state.customTextOutlineWidth,
+              customTextAlign: state.customTextAlign,
+              custom2TextFontSize: state.custom2TextFontSize,
+              custom2TextColor: state.custom2TextColor,
+              custom2TextPosition: state.custom2TextPosition,
+              custom2TextFontFamily: state.custom2TextFontFamily,
+              custom2TextBold: state.custom2TextBold,
+              custom2TextOutlineWidth: state.custom2TextOutlineWidth,
+              custom2TextAlign: state.custom2TextAlign,
+              muteOriginalAudio: state.muteOriginalAudio,
+              originalVolume: state.originalVolume,
+              voiceoverVolume: state.voiceoverVolume,
+              bgMusicEnabled: state.bgMusicEnabled,
+              bgMusicVolume: state.bgMusicVolume,
+              bgMusicFadeIn: state.bgMusicFadeIn,
+              bgMusicFadeOut: state.bgMusicFadeOut,
+              audioDuckEnabled: state.audioDuckEnabled,
+              audioDuckVolume: state.audioDuckVolume,
+              overlayEnabled: state.overlayEnabled,
+              overlayX: state.overlayX,
+              overlayY: state.overlayY,
+              overlayRotation: state.overlayRotation,
+              overlayScale: state.overlayScale,
+              lowerThirdEnabled: state.lowerThirdEnabled,
+              lowerThirdName: state.lowerThirdName,
+              lowerThirdSubtitle: state.lowerThirdSubtitle,
+              lowerThirdTemplate: state.lowerThirdTemplate,
+              lowerThirdDuration: state.lowerThirdDuration,
+              videoFormat: state.videoFormat,
+              standardBgColor: state.standardBgColor,
+              socialBgColor: state.socialBgColor,
+              socialVideoScale: state.socialVideoScale,
+              videoOffsetX: state.videoOffsetX,
+              videoOffsetY: state.videoOffsetY,
+              cinematicBgColor: state.cinematicBgColor,
+              videoBarHeight: state.videoBarHeight,
+              activePlatformPresetId: state.activePlatformPreset.id,
+              customPresetWidth: state.customPresetWidth,
+              customPresetHeight: state.customPresetHeight,
+            }
+            const json = JSON.stringify(toSave, null, 2)
+            const blob = new Blob([json], { type: 'application/json' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `clipforge-project-${Date.now()}.clipforge`
+            a.click()
+            URL.revokeObjectURL(url)
+          }}
+          onLoadProject={() => {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.accept = '.clipforge,application/json'
+            input.onchange = (e) => {
+              const file = (e.target as HTMLInputElement).files?.[0]
+              if (!file) return
+              const reader = new FileReader()
+              reader.onload = (ev) => {
+                try {
+                  const data = JSON.parse(ev.target?.result as string)
+                  if (!data.version || !data.clips) return
+                  const preset = PLATFORM_PRESETS.find(p => p.id === data.activePlatformPresetId) ?? DEFAULT_PRESET
+                  setState(prev => ({
+                    ...prev,
+                    importJobId: data.importJobId ?? prev.importJobId,
+                    clips: data.clips ?? prev.clips,
+                    activeClipId: data.activeClipId ?? null,
+                    subtitleFontSize: data.subtitleFontSize ?? prev.subtitleFontSize,
+                    subtitleColor: data.subtitleColor ?? prev.subtitleColor,
+                    subtitlePosition: data.subtitlePosition ?? prev.subtitlePosition,
+                    subtitleFontFamily: data.subtitleFontFamily ?? prev.subtitleFontFamily,
+                    subtitleBold: data.subtitleBold ?? prev.subtitleBold,
+                    subtitleOutlineWidth: data.subtitleOutlineWidth ?? prev.subtitleOutlineWidth,
+                    subtitleTextAlign: data.subtitleTextAlign ?? prev.subtitleTextAlign,
+                    customTextFontSize: data.customTextFontSize ?? prev.customTextFontSize,
+                    customTextColor: data.customTextColor ?? prev.customTextColor,
+                    customTextPosition: data.customTextPosition ?? prev.customTextPosition,
+                    customTextFontFamily: data.customTextFontFamily ?? prev.customTextFontFamily,
+                    customTextBold: data.customTextBold ?? prev.customTextBold,
+                    customTextOutlineWidth: data.customTextOutlineWidth ?? prev.customTextOutlineWidth,
+                    customTextAlign: data.customTextAlign ?? prev.customTextAlign,
+                    custom2TextFontSize: data.custom2TextFontSize ?? prev.custom2TextFontSize,
+                    custom2TextColor: data.custom2TextColor ?? prev.custom2TextColor,
+                    custom2TextPosition: data.custom2TextPosition ?? prev.custom2TextPosition,
+                    custom2TextFontFamily: data.custom2TextFontFamily ?? prev.custom2TextFontFamily,
+                    custom2TextBold: data.custom2TextBold ?? prev.custom2TextBold,
+                    custom2TextOutlineWidth: data.custom2TextOutlineWidth ?? prev.custom2TextOutlineWidth,
+                    custom2TextAlign: data.custom2TextAlign ?? prev.custom2TextAlign,
+                    muteOriginalAudio: data.muteOriginalAudio ?? prev.muteOriginalAudio,
+                    originalVolume: data.originalVolume ?? prev.originalVolume,
+                    voiceoverVolume: data.voiceoverVolume ?? prev.voiceoverVolume,
+                    bgMusicEnabled: data.bgMusicEnabled ?? prev.bgMusicEnabled,
+                    bgMusicVolume: data.bgMusicVolume ?? prev.bgMusicVolume,
+                    bgMusicFadeIn: data.bgMusicFadeIn ?? prev.bgMusicFadeIn,
+                    bgMusicFadeOut: data.bgMusicFadeOut ?? prev.bgMusicFadeOut,
+                    audioDuckEnabled: data.audioDuckEnabled ?? prev.audioDuckEnabled,
+                    audioDuckVolume: data.audioDuckVolume ?? prev.audioDuckVolume,
+                    overlayEnabled: data.overlayEnabled ?? prev.overlayEnabled,
+                    overlayX: data.overlayX ?? prev.overlayX,
+                    overlayY: data.overlayY ?? prev.overlayY,
+                    overlayRotation: data.overlayRotation ?? prev.overlayRotation,
+                    overlayScale: data.overlayScale ?? prev.overlayScale,
+                    lowerThirdEnabled: data.lowerThirdEnabled ?? prev.lowerThirdEnabled,
+                    lowerThirdName: data.lowerThirdName ?? prev.lowerThirdName,
+                    lowerThirdSubtitle: data.lowerThirdSubtitle ?? prev.lowerThirdSubtitle,
+                    lowerThirdTemplate: data.lowerThirdTemplate ?? prev.lowerThirdTemplate,
+                    lowerThirdDuration: data.lowerThirdDuration ?? prev.lowerThirdDuration,
+                    videoFormat: data.videoFormat ?? prev.videoFormat,
+                    standardBgColor: data.standardBgColor ?? prev.standardBgColor,
+                    socialBgColor: data.socialBgColor ?? prev.socialBgColor,
+                    socialVideoScale: data.socialVideoScale ?? prev.socialVideoScale,
+                    videoOffsetX: data.videoOffsetX ?? prev.videoOffsetX,
+                    videoOffsetY: data.videoOffsetY ?? prev.videoOffsetY,
+                    cinematicBgColor: data.cinematicBgColor ?? prev.cinematicBgColor,
+                    videoBarHeight: data.videoBarHeight ?? prev.videoBarHeight,
+                    activePlatformPreset: preset,
+                    customPresetWidth: data.customPresetWidth ?? prev.customPresetWidth,
+                    customPresetHeight: data.customPresetHeight ?? prev.customPresetHeight,
+                    importStatus: 'done',
+                  }))
+                } catch { /* ignore parse errors */ }
+              }
+              reader.readAsText(file)
+            }
+            input.click()
+          }}
         />
       )}
 
@@ -1216,6 +1483,10 @@ export default function HomePage() {
             onVideoOffsetChange={(x, y) => updateState({ videoOffsetX: x, videoOffsetY: y })}
             presetWidth={outputWidth}
             presetHeight={outputHeight}
+            showOriginal={state.showOriginal}
+            onToggleShowOriginal={() => updateState({ showOriginal: !state.showOriginal })}
+            showGrid={state.showGrid}
+            onToggleShowGrid={() => updateState({ showGrid: !state.showGrid })}
           />
         </div>
 

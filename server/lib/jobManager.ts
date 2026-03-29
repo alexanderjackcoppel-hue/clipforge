@@ -27,13 +27,21 @@ export interface JobState {
 }
 
 type JobFn = () => Promise<void>
+export type QueueType = 'io' | 'render' | 'ai'
+
+// Separate concurrency limits by work type:
+//   io     — download + trim (disk I/O bound)          → 2 concurrent
+//   render — export (VideoToolbox / libx264)            → 2 concurrent
+//   ai     — transcription + analysis (Whisper, Claude) → 1 concurrent
+const QUEUE_LIMITS: Record<QueueType, number> = { io: 2, render: 2, ai: 1 }
 
 class JobManager {
   private jobs = new Map<string, JobState>()
   private clients = new Map<string, Response[]>()
-  private queue: Array<{ fn: JobFn; resolve: () => void; reject: (e: Error) => void }> = []
-  private activeCount = 0
-  private readonly maxConcurrent = 1
+  private queues: Record<QueueType, Array<{ fn: JobFn; resolve: () => void; reject: (e: Error) => void }>> = {
+    io: [], render: [], ai: [],
+  }
+  private activeCounts: Record<QueueType, number> = { io: 0, render: 0, ai: 0 }
 
   createJob(): string {
     const id: string = uuidv4()
@@ -122,30 +130,34 @@ class JobManager {
     }
   }
 
-  enqueue(fn: JobFn): Promise<void> {
+  enqueue(fn: JobFn, queue: QueueType = 'render'): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      this.queue.push({ fn, resolve, reject })
-      this.drain()
+      this.queues[queue].push({ fn, resolve, reject })
+      this.drain(queue)
     })
   }
 
-  private drain(): void {
-    if (this.activeCount >= this.maxConcurrent || this.queue.length === 0) return
+  /** Download + trim: disk I/O bound, up to 2 concurrent */
+  enqueueIO(fn: JobFn): Promise<void> { return this.enqueue(fn, 'io') }
+  /** FFmpeg export: GPU/CPU bound via VideoToolbox or libx264, up to 2 concurrent */
+  enqueueRender(fn: JobFn): Promise<void> { return this.enqueue(fn, 'render') }
+  /** Whisper transcription + Claude analysis: long-running AI, 1 at a time */
+  enqueueAI(fn: JobFn): Promise<void> { return this.enqueue(fn, 'ai') }
 
-    const item = this.queue.shift()
+  private drain(queue: QueueType): void {
+    const limit = QUEUE_LIMITS[queue]
+    if (this.activeCounts[queue] >= limit || this.queues[queue].length === 0) return
+
+    const item = this.queues[queue].shift()
     if (!item) return
 
-    this.activeCount++
+    this.activeCounts[queue]++
     item.fn()
-      .then(() => {
-        item.resolve()
-      })
-      .catch((err: Error) => {
-        item.reject(err)
-      })
+      .then(() => item.resolve())
+      .catch((err: Error) => item.reject(err))
       .finally(() => {
-        this.activeCount--
-        this.drain()
+        this.activeCounts[queue]--
+        this.drain(queue)
       })
   }
 

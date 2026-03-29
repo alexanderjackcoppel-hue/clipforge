@@ -67,6 +67,18 @@ const FONT_FAMILIES = [
   { label: 'Trebuchet', value: 'Trebuchet MS' },
 ]
 
+interface CaptionPreset { name: string; fontFamily: string; fontSize: number; color: string; bold: boolean; outlineWidth: number }
+const CAPTION_PRESETS: CaptionPreset[] = [
+  { name: 'Clean',   fontFamily: 'Arial',       fontSize: 48, color: 'FFFFFF', bold: true,  outlineWidth: 3 },
+  { name: 'Impact',  fontFamily: 'Impact',      fontSize: 56, color: 'FFFF00', bold: true,  outlineWidth: 4 },
+  { name: 'Hormozi', fontFamily: 'Impact',      fontSize: 56, color: 'FFFFFF', bold: true,  outlineWidth: 0 },
+  { name: 'Neon',    fontFamily: 'Arial',       fontSize: 48, color: '00E5FF', bold: true,  outlineWidth: 2 },
+  { name: 'Soft',    fontFamily: 'Helvetica',   fontSize: 40, color: 'FFFFFF', bold: false, outlineWidth: 1 },
+  { name: 'Fire',    fontFamily: 'Impact',      fontSize: 52, color: 'FF3B30', bold: true,  outlineWidth: 3 },
+  { name: 'Gold',    fontFamily: 'Georgia',     fontSize: 48, color: 'FFD700', bold: true,  outlineWidth: 2 },
+  { name: 'Minimal', fontFamily: 'Arial',       fontSize: 36, color: 'FFFFFF', bold: false, outlineWidth: 0 },
+]
+
 function StyleControls({ style, onChange }: { style: StyleProps; onChange: (p: Partial<StyleProps>) => void }) {
   const hexToInput = (h: string) => `#${h}`
   const inputToHex = (v: string) => v.replace('#', '').toUpperCase()
@@ -297,17 +309,37 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
             </div>
           )}
 
-          <div className="border-t border-zinc-800 pt-3">
-            <p className="text-xs font-medium text-zinc-400 mb-3">Style</p>
-            <StyleControls style={autoStyle} onChange={patch => {
-              if (patch.fontSize !== undefined)     onAutoFontSizeChange(patch.fontSize)
-              if (patch.color !== undefined)        onAutoColorChange(patch.color)
-              if (patch.fontFamily !== undefined)   onAutoFontFamilyChange(patch.fontFamily)
-              if (patch.bold !== undefined)         onAutoBoldChange(patch.bold)
-              if (patch.outlineWidth !== undefined) onAutoOutlineWidthChange(patch.outlineWidth)
-              if (patch.textAlign !== undefined)    onAutoTextAlignChange(patch.textAlign)
-            }} />
-            <p className="text-xs text-zinc-600 mt-3">Position: drag the dot in the preview →</p>
+          <div className="border-t border-zinc-800 pt-3 space-y-3">
+            <div>
+              <p className="text-xs font-medium text-zinc-400 mb-2">Presets</p>
+              <div className="flex flex-wrap gap-1.5">
+                {CAPTION_PRESETS.map(p => (
+                  <button key={p.name} type="button"
+                    onClick={() => {
+                      onAutoFontSizeChange(p.fontSize)
+                      onAutoColorChange(p.color)
+                      onAutoFontFamilyChange(p.fontFamily)
+                      onAutoBoldChange(p.bold)
+                      onAutoOutlineWidthChange(p.outlineWidth)
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-xs border border-zinc-700 bg-zinc-800/80 text-zinc-300 hover:border-violet-500/60 hover:bg-violet-600/10 hover:text-violet-300 transition-all"
+                    style={{ fontFamily: p.fontFamily, color: `#${p.color}`, WebkitTextStroke: p.outlineWidth > 0 ? `0.5px #000` : undefined }}
+                  >{p.name}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-zinc-400 mb-3">Style</p>
+              <StyleControls style={autoStyle} onChange={patch => {
+                if (patch.fontSize !== undefined)     onAutoFontSizeChange(patch.fontSize)
+                if (patch.color !== undefined)        onAutoColorChange(patch.color)
+                if (patch.fontFamily !== undefined)   onAutoFontFamilyChange(patch.fontFamily)
+                if (patch.bold !== undefined)         onAutoBoldChange(patch.bold)
+                if (patch.outlineWidth !== undefined) onAutoOutlineWidthChange(patch.outlineWidth)
+                if (patch.textAlign !== undefined)    onAutoTextAlignChange(patch.textAlign)
+              }} />
+            </div>
+            <p className="text-xs text-zinc-600">Position: drag the dot in the preview →</p>
             <p className="text-xs font-mono text-zinc-700">{autoPosition.x}% · {autoPosition.y}%</p>
           </div>
         </div>

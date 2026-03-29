@@ -9,6 +9,8 @@ interface TopBarProps {
   canExport: boolean
   displayWidth?: number
   displayHeight?: number
+  onSaveProject?: () => void
+  onLoadProject?: () => void
 }
 
 const PRESET_GROUPS = [
@@ -17,7 +19,7 @@ const PRESET_GROUPS = [
   { label: 'Other', ids: ['tiktok', 'twitter-x', 'linkedin', 'pinterest', 'custom'] },
 ]
 
-export default function TopBar({ activePreset, onPresetChange, onExport, canExport, displayWidth, displayHeight }: TopBarProps) {
+export default function TopBar({ activePreset, onPresetChange, onExport, canExport, displayWidth, displayHeight, onSaveProject, onLoadProject }: TopBarProps) {
   const [open, setOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -105,6 +107,34 @@ export default function TopBar({ activePreset, onPresetChange, onExport, canExpo
       </div>
 
       <div className="flex-1" />
+
+      {/* Save / Load project */}
+      {onLoadProject && (
+        <button
+          type="button"
+          onClick={onLoadProject}
+          title="Load project"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-transparent hover:border-zinc-700 transition-colors"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+          Load
+        </button>
+      )}
+      {onSaveProject && (
+        <button
+          type="button"
+          onClick={onSaveProject}
+          title="Save project"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-transparent hover:border-zinc-700 transition-colors"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+          </svg>
+          Save
+        </button>
+      )}
 
       {/* Primary export button */}
       <button

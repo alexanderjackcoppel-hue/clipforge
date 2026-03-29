@@ -129,73 +129,16 @@ export default function OverlayStep({
             <p className="text-xs text-zinc-600">Supported: PNG, JPEG, WebP (max 100MB)</p>
           </div>
 
-          {/* Draggable position canvas */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-zinc-400">Position</label>
-            <div className="flex items-start gap-4">
-              {/* 9:16 canvas */}
-              <div
-                ref={canvasRef}
-                onMouseDown={handleCanvasMouseDown}
-                className="relative flex-shrink-0 rounded-lg overflow-hidden border border-zinc-700 cursor-crosshair select-none"
-                style={{ width: FRAME_W, height: FRAME_H, background: '#18181b' }}
-                title="Click or drag to position the overlay"
-              >
-                {/* Grid lines hint */}
-                <div className="absolute inset-0 opacity-10" style={{
-                  backgroundImage: 'linear-gradient(#6d28d9 1px, transparent 1px), linear-gradient(90deg, #6d28d9 1px, transparent 1px)',
-                  backgroundSize: `${FRAME_W/3}px ${FRAME_H/3}px`,
-                }} />
-
-                {/* Overlay image positioned at overlayX%, overlayY% */}
-                {previewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={previewUrl}
-                    alt="Overlay"
-                    draggable={false}
-                    style={{
-                      position: 'absolute',
-                      width: imgPreviewW,
-                      height: 'auto',
-                      left: `${overlayX}%`,
-                      top: `${overlayY}%`,
-                      transform: `translate(-50%, -50%) rotate(${overlayRotation}deg)`,
-                      pointerEvents: 'none',
-                    }}
-                  />
-                ) : (
-                  /* Placeholder dot */
-                  <div
-                    style={{
-                      position: 'absolute',
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      background: '#7c3aed',
-                      left: `${overlayX}%`,
-                      top: `${overlayY}%`,
-                      transform: 'translate(-50%, -50%)',
-                      pointerEvents: 'none',
-                    }}
-                  />
-                )}
-              </div>
-
-              <div className="flex-1 space-y-1 pt-1">
-                <p className="text-xs text-zinc-500">Click or drag to place</p>
-                <p className="text-xs font-mono text-zinc-500">
-                  X {overlayX.toFixed(0)}% · Y {overlayY.toFixed(0)}%
-                </p>
-                <button
-                  type="button"
-                  onClick={() => onPositionChange(50, 50)}
-                  className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors mt-1"
-                >
-                  Reset to center
-                </button>
-              </div>
-            </div>
+          {/* Position hint — drag directly in the preview */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-zinc-600">Drag in the preview to reposition</p>
+            <button
+              type="button"
+              onClick={() => onPositionChange(50, 50)}
+              className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+            >
+              Reset to center
+            </button>
           </div>
 
           {/* Size slider */}

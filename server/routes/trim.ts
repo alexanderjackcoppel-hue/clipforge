@@ -52,7 +52,7 @@ router.post('/', async (req, res) => {
   const opJobId = jobManager.createJob()
   res.json({ jobId: opJobId })
 
-  jobManager.enqueue(async () => {
+  jobManager.enqueueIO(async () => {
     try {
       jobManager.sendProgress(opJobId, { type: 'progress', stage: 'trimming', percent: 0 })
 

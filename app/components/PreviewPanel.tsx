@@ -64,6 +64,11 @@ interface PreviewPanelProps {
   // Output dimensions (for correct aspect ratio preview)
   presetWidth: number
   presetHeight: number
+  // Preview toggles
+  showOriginal?: boolean
+  onToggleShowOriginal?: () => void
+  showGrid?: boolean
+  onToggleShowGrid?: () => void
 }
 
 function overlayCSS(x: number, y: number, rotation: number, scale: number): React.CSSProperties {
@@ -111,6 +116,8 @@ export default function PreviewPanel({
   cropEditClipId, activeCropRect, onCropChange, onCropDone, onCropCancel,
   zoomSelectClipId, onZoomPointSet,
   presetWidth, presetHeight,
+  showOriginal, onToggleShowOriginal,
+  showGrid, onToggleShowGrid,
 }: PreviewPanelProps) {
   const containerRef     = useRef<HTMLDivElement>(null)
   const videoRef         = useRef<HTMLVideoElement>(null)
@@ -956,7 +963,7 @@ export default function PreviewPanel({
             <div ref={snapH75LineRef} style={{ display: 'none', position: 'absolute', top: '75%', left: 0, right: 0, height: 1, background: 'rgba(139,92,246,0.5)',  pointerEvents: 'none', zIndex: 50 }} />
 
             {/* Overlay image — draggable */}
-            {overlayEnabled && overlayPreviewUrl && (
+            {overlayEnabled && overlayPreviewUrl && !showOriginal && (
               <img
                 ref={overlayImgRef}
                 src={overlayPreviewUrl}
@@ -969,25 +976,25 @@ export default function PreviewPanel({
             )}
 
             {/* Auto subtitle layer */}
-            {autoEnabled && (
+            {autoEnabled && !showOriginal && (
               <div className="absolute pointer-events-none"
-                style={{ left: 'var(--auto-x)', top: 'var(--auto-y)', transform: autoStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
+                style={{ left: 'var(--auto-x, 50%)', top: 'var(--auto-y, 85%)', transform: autoStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
                 <span style={subtitleStyle(autoStyle, activeLayer === 'custom')}>{autoText}</span>
               </div>
             )}
 
             {/* Custom text layer */}
-            {customEnabled && (
+            {customEnabled && !showOriginal && (
               <div className="absolute pointer-events-none"
-                style={{ left: 'var(--custom-x)', top: 'var(--custom-y)', transform: customStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
+                style={{ left: 'var(--custom-x, 50%)', top: 'var(--custom-y, 50%)', transform: customStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
                 <span style={subtitleStyle(customStyle, activeLayer === 'auto')}>{customText}</span>
               </div>
             )}
 
             {/* Custom text 2 layer */}
-            {custom2Enabled && (
+            {custom2Enabled && !showOriginal && (
               <div className="absolute pointer-events-none"
-                style={{ left: 'var(--custom2-x)', top: 'var(--custom2-y)', transform: custom2Style.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
+                style={{ left: 'var(--custom2-x, 50%)', top: 'var(--custom2-y, 50%)', transform: custom2Style.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
                 <span style={subtitleStyle(custom2Style, activeLayer !== 'custom2')}>{custom2Text}</span>
               </div>
             )}
@@ -1013,13 +1020,30 @@ export default function PreviewPanel({
               </div>
             ))}
 
+            {/* Grid overlay (rule of thirds) */}
+            {showGrid && (
+              <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 30 }}>
+                <div style={{ position: 'absolute', left: '33.33%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.15)' }} />
+                <div style={{ position: 'absolute', left: '66.66%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.15)' }} />
+                <div style={{ position: 'absolute', top: '33.33%', left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.15)' }} />
+                <div style={{ position: 'absolute', top: '66.66%', left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.15)' }} />
+              </div>
+            )}
+
+            {/* Before/after: show original (hide subtitle/overlay layers) */}
+            {showOriginal && (
+              <div className="absolute inset-0 bg-black/0 pointer-events-none z-40 flex items-end justify-center pb-2">
+                <span className="text-[10px] text-white/60 bg-black/40 rounded-full px-2 py-0.5">Original</span>
+              </div>
+            )}
+
             {/* Hints */}
-            {(autoEnabled || customEnabled || custom2Enabled) && activeLayer !== 'emoji' && videoFormat !== 'social-post' && (
+            {(autoEnabled || customEnabled || custom2Enabled) && activeLayer !== 'emoji' && videoFormat !== 'social-post' && !showOriginal && (
               <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
                 <span className="text-[10px] text-white/40 bg-black/30 rounded-full px-2 py-0.5">drag to reposition text</span>
               </div>
             )}
-            {videoFormat === 'social-post' && videoUrl && (
+            {videoFormat === 'social-post' && videoUrl && !showOriginal && (
               <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
                 <span className="text-[10px] text-white/40 bg-black/30 rounded-full px-2 py-0.5">drag to move · drag corners to resize</span>
               </div>
@@ -1076,11 +1100,37 @@ export default function PreviewPanel({
               <span className="text-[10px] text-violet-400 bg-violet-900/30 rounded px-1.5 py-0.5">Click frame to set zoom target</span>
             )}
 
-            {videoFormat !== 'standard' && !zoomSelectClipId && (
-              <span className="ml-auto text-[9px] font-medium bg-zinc-800 text-zinc-500 rounded px-1.5 py-0.5 uppercase tracking-wide">
-                {videoFormat.replace('-', ' ')}
-              </span>
-            )}
+            <div className="ml-auto flex items-center gap-1">
+              {/* Before/After toggle */}
+              {onToggleShowOriginal && (
+                <button
+                  type="button"
+                  onClick={onToggleShowOriginal}
+                  title={showOriginal ? 'Show edited' : 'Show original'}
+                  className={`text-[10px] px-2 py-0.5 rounded border transition-all ${showOriginal ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  {showOriginal ? 'Original' : 'Edited'}
+                </button>
+              )}
+              {/* Grid overlay toggle */}
+              {onToggleShowGrid && (
+                <button
+                  type="button"
+                  onClick={onToggleShowGrid}
+                  title="Toggle rule-of-thirds grid"
+                  className={`w-6 h-6 flex items-center justify-center rounded border transition-all ${showGrid ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h16M4 16h16M8 4v16M16 4v16" />
+                  </svg>
+                </button>
+              )}
+              {videoFormat !== 'standard' && !zoomSelectClipId && (
+                <span className="text-[9px] font-medium bg-zinc-800 text-zinc-500 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                  {videoFormat.replace('-', ' ')}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}

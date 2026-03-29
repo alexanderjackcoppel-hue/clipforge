@@ -1,0 +1,62 @@
+{
+  "date": "2026-03-28",
+  "window": "7d",
+  "metrics": {
+    "commits": 22,
+    "contributors": 1,
+    "prs_merged": 0,
+    "insertions": 3507,
+    "deletions": 593,
+    "net_loc": 2914,
+    "test_loc": 480,
+    "test_ratio": 0.14,
+    "active_days": 2,
+    "sessions": 2,
+    "deep_sessions": 1,
+    "avg_session_minutes": 42,
+    "loc_per_session_hour": 2550,
+    "feat_pct": 0.36,
+    "fix_pct": 0.41,
+    "peak_hour": 17,
+    "ai_assisted_commits": 22
+  },
+  "authors": {
+    "Alexander Coppel": {
+      "commits": 22,
+      "insertions": 3507,
+      "deletions": 593,
+      "test_ratio": 0.14,
+      "top_area": "app/components/"
+    }
+  },
+  "version_range": ["initial", "1.1.0"],
+  "streak_days": 1,
+  "tweetable": "Week of Mar 21: 22 commits, 2.9k net LOC, 14% tests | v1.1.0 shipped — 11 platform presets, universal editor | 100% AI-assisted | Streak: 1d",
+  "test_health": {
+    "total_test_files": 7,
+    "tests_added_this_period": 1,
+    "regression_test_commits": 0,
+    "test_files_changed": 2
+  },
+  "backlog": {
+    "total_open": 1,
+    "p0_p1": 0,
+    "p2": 1,
+    "completed_this_period": 6,
+    "added_this_period": 0
+  },
+  "skill_usage": {
+    "office-hours": 2,
+    "plan-ceo-review": 2,
+    "plan-eng-review": 2,
+    "plan-design-review": 1,
+    "review": 3,
+    "qa": 2,
+    "design-review": 2,
+    "ship": 2,
+    "retro": 2,
+    "browse": 1,
+    "careful": 1,
+    "document-release": 1
+  }
+}

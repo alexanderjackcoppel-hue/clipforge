@@ -81,6 +81,34 @@ export async function trimVideo(
   return res.json() as Promise<{ jobId: string }>
 }
 
+export async function detectSilence(
+  jobId: string,
+  clipSuffix?: string,
+  noiseDb = -40,
+  minDuration = 0.5,
+): Promise<{
+  silenceIntervals: Array<{ start: number; end: number }>
+  speakingSegments: Array<{ start: number; end: number }>
+  totalDuration: number | null
+}> {
+  const res = await fetch(`${API}/api/silence-detect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId, ...(clipSuffix && { clipSuffix }), noiseDb: String(noiseDb), minDuration: String(minDuration) }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Network error' })) as { error?: string }
+    throw new Error(err.error || 'Silence detection failed')
+  }
+  return res.json()
+}
+
+export function getWaveformUrl(jobId: string, clipSuffix?: string): string {
+  const params = new URLSearchParams({ jobId })
+  if (clipSuffix) params.set('clipSuffix', clipSuffix)
+  return `${API}/api/waveform?${params}`
+}
+
 export async function transcribeVideo(jobId: string, clipSuffix?: string): Promise<{ jobId: string }> {
   const res = await fetch(`${API}/api/transcribe`, {
     method: 'POST',
@@ -140,12 +168,24 @@ export interface ExportParams {
   zoomEnabled?: boolean
   zoomX?: number
   zoomY?: number
+  speed?: number
+  flipH?: boolean
+  flipV?: boolean
+  colorPreset?: string
   custom2TextSubtitles?: Array<{ id: number; start: number; end: number; text: string }>
   custom2TextSubtitleStyle?: SubtitleStylePayload
   emojiStickers?: Array<{ id: string; emoji: string; x: number; y: number; size: number }>
   standardBgColor?: string
   presetWidth?: number
   presetHeight?: number
+  reversed?: boolean
+  audioDuckEnabled?: boolean
+  audioDuckVolume?: number
+  lowerThirdEnabled?: boolean
+  lowerThirdName?: string
+  lowerThirdSubtitle?: string
+  lowerThirdTemplate?: 'clean-line' | 'dark-chip' | 'broadcast'
+  lowerThirdDuration?: number
 }
 
 async function renderEmojiCanvas(
@@ -209,9 +249,21 @@ export async function exportVideo(params: ExportParams): Promise<{ jobId: string
   if (params.zoomEnabled) form.append('zoomEnabled', 'true')
   if (params.zoomX !== undefined) form.append('zoomX', String(params.zoomX))
   if (params.zoomY !== undefined) form.append('zoomY', String(params.zoomY))
+  if (params.speed !== undefined && params.speed !== 1.0) form.append('speed', String(params.speed))
+  if (params.flipH) form.append('flipH', 'true')
+  if (params.flipV) form.append('flipV', 'true')
+  if (params.colorPreset) form.append('colorPreset', params.colorPreset)
 
   if (params.presetWidth) form.append('presetWidth', String(params.presetWidth))
   if (params.presetHeight) form.append('presetHeight', String(params.presetHeight))
+  if (params.reversed) form.append('reversed', 'true')
+  if (params.audioDuckEnabled) form.append('audioDuckEnabled', 'true')
+  if (params.audioDuckVolume !== undefined) form.append('audioDuckVolume', String(params.audioDuckVolume))
+  if (params.lowerThirdEnabled) form.append('lowerThirdEnabled', 'true')
+  if (params.lowerThirdName) form.append('lowerThirdName', params.lowerThirdName)
+  if (params.lowerThirdSubtitle) form.append('lowerThirdSubtitle', params.lowerThirdSubtitle)
+  if (params.lowerThirdTemplate) form.append('lowerThirdTemplate', params.lowerThirdTemplate)
+  if (params.lowerThirdDuration !== undefined) form.append('lowerThirdDuration', String(params.lowerThirdDuration))
 
   if (params.emojiStickers && params.emojiStickers.length > 0) {
     const blob = await renderEmojiCanvas(params.emojiStickers, params.presetWidth ?? 1080, params.presetHeight ?? 1920)

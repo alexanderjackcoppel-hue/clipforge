@@ -97,6 +97,18 @@ router.post('/', (req, res) => {
       zoomEnabled,
       zoomX,
       zoomY,
+      speed,
+      flipH,
+      flipV,
+      colorPreset,
+      reversed,
+      audioDuckEnabled,
+      audioDuckVolume,
+      lowerThirdEnabled,
+      lowerThirdName = '',
+      lowerThirdSubtitle = '',
+      lowerThirdTemplate = 'dark-chip',
+      lowerThirdDuration = '5',
       presetWidth = '1080',
       presetHeight = '1920',
     } = req.body as Record<string, string>
@@ -219,7 +231,7 @@ router.post('/', (req, res) => {
     const opJobId = jobManager.createJob()
     res.json({ jobId: opJobId })
 
-    jobManager.enqueue(async () => {
+    jobManager.enqueueRender(async () => {
       try {
         jobManager.sendProgress(opJobId, { type: 'progress', stage: 'exporting', percent: 0 })
 
@@ -256,6 +268,19 @@ router.post('/', (req, res) => {
           zoomEnabled: zoomEnabled === 'true',
           zoomX: zoomX ? parseFloat(zoomX) : 50,
           zoomY: zoomY ? parseFloat(zoomY) : 50,
+          speed: speed ? Math.max(0.25, Math.min(4.0, parseFloat(speed))) : 1.0,
+          flipH: flipH === 'true',
+          flipV: flipV === 'true',
+          colorPreset: colorPreset || undefined,
+          reversed: reversed === 'true',
+          audioDuckEnabled: audioDuckEnabled === 'true',
+          audioDuckVolume: audioDuckVolume ? Math.max(0.05, Math.min(0.9, parseFloat(audioDuckVolume))) : 0.3,
+          lowerThirdEnabled: lowerThirdEnabled === 'true',
+          lowerThirdName: lowerThirdName || undefined,
+          lowerThirdSubtitle: lowerThirdSubtitle || undefined,
+          lowerThirdTemplate: (['clean-line', 'dark-chip', 'broadcast'].includes(lowerThirdTemplate)
+            ? lowerThirdTemplate : 'dark-chip') as 'clean-line' | 'dark-chip' | 'broadcast',
+          lowerThirdDuration: lowerThirdDuration ? Math.max(1, Math.min(30, parseFloat(lowerThirdDuration))) : 5,
           outputWidth,
           outputHeight,
         })

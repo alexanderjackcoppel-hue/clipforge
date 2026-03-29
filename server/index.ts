@@ -11,6 +11,8 @@ import exportRouter from './routes/export.js'
 import analyseRouter from './routes/analyse.js'
 import thumbnailRouter from './routes/thumbnail.js'
 import ttsRouter from './routes/tts.js'
+import silenceRouter from './routes/silence.js'
+import waveformRouter from './routes/waveform.js'
 
 export const TMP_DIR = join('/tmp', 'clipforge')
 mkdirSync(TMP_DIR, { recursive: true })
@@ -93,7 +95,7 @@ app.get('/files/:jobId/:filename', (req, res) => {
     return
   }
   // Allowlist regex: base names + optional 8-char hex suffix, safe extensions only
-  const ALLOWED_FILE_RE = /^(source|trimmed|final|audio)(_[0-9a-f]{8})?\.(mp4|wav)$/
+  const ALLOWED_FILE_RE = /^(source|trimmed|final|audio|waveform)(_[0-9a-f]{8})?\.(mp4|wav|png)$/
   if (!ALLOWED_FILE_RE.test(filename)) {
     res.status(400).json({ error: 'File not found' })
     return
@@ -114,6 +116,8 @@ app.use('/api/export', exportRouter)
 app.use('/api/analyse', analyseRouter)
 app.use('/api/thumbnail', thumbnailRouter)
 app.use('/api/tts', ttsRouter)
+app.use('/api/silence-detect', silenceRouter)
+app.use('/api/waveform', waveformRouter)
 
 // --- Cleanup ---
 setInterval(cleanupOldJobs, 30 * 60 * 1000)

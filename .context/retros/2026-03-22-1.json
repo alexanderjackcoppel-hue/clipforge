@@ -1,0 +1,41 @@
+{
+  "date": "2026-03-22",
+  "window": "7d",
+  "metrics": {
+    "commits": 16,
+    "contributors": 1,
+    "prs_merged": 0,
+    "insertions": 3800,
+    "deletions": 450,
+    "net_loc": 3350,
+    "test_loc": 520,
+    "test_ratio": 0.14,
+    "active_days": 3,
+    "sessions": 3,
+    "deep_sessions": 1,
+    "avg_session_minutes": 27,
+    "loc_per_session_hour": 2800,
+    "feat_pct": 0.13,
+    "fix_pct": 0.62,
+    "peak_hour": 9,
+    "ai_assisted_commits": 16
+  },
+  "authors": {
+    "Alexander Coppel": {
+      "commits": 16,
+      "insertions": 3800,
+      "deletions": 450,
+      "test_ratio": 0.14,
+      "top_area": "app/components/"
+    }
+  },
+  "version_range": ["initial", "initial"],
+  "streak_days": 4,
+  "tweetable": "Week of Mar 15: 16 commits, 3.4k net LOC, 14% tests, 3 sessions, 100% AI-assisted | ClipForge from 0 to full a11y",
+  "test_health": {
+    "total_test_files": 7,
+    "tests_added_this_period": 7,
+    "regression_test_commits": 1,
+    "test_files_changed": 4
+  }
+}

@@ -54,7 +54,7 @@ router.post('/', async (req, res) => {
   const opJobId = jobManager.createJob()
   res.json({ jobId: opJobId })
 
-  jobManager.enqueue(async () => {
+  jobManager.enqueueAI(async () => {
     try {
       jobManager.sendProgress(opJobId, { type: 'progress', stage: 'extracting_audio', percent: 10 })
 

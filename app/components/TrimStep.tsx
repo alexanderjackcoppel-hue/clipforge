@@ -4,6 +4,12 @@ import type { Clip } from '../page'
 
 interface CropRect { x: number; y: number; w: number; h: number }
 
+interface SilenceResult {
+  silenceIntervals: Array<{ start: number; end: number }>
+  speakingSegments: Array<{ start: number; end: number }>
+  totalDuration: number | null
+}
+
 interface TrimStepProps {
   clips: Clip[]
   onAddClip: (startSecs: number, endSecs: number) => void
@@ -20,6 +26,13 @@ interface TrimStepProps {
   onEndCropEdit: () => void
   onSourceVideoAR: (ar: number) => void
   sourceVideoUrl: string | null
+  onUpdateClipSpeed: (clipId: string, speed: number) => void
+  onToggleClipFlip: (clipId: string, axis: 'flipH' | 'flipV', value: boolean) => void
+  onUpdateClipColorPreset: (clipId: string, preset: string) => void
+  onToggleClipReverse: (clipId: string, value: boolean) => void
+  onReorderClips: (fromIdx: number, toIdx: number) => void
+  onDetectSilence: (clipId: string) => Promise<SilenceResult | null>
+  importJobId: string | null
   disabled: boolean
 }
 
@@ -47,6 +60,25 @@ function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v))
 }
 
+const SPEED_OPTIONS = [
+  { label: '0.25×', value: 0.25 },
+  { label: '0.5×',  value: 0.5 },
+  { label: '1×',    value: 1.0 },
+  { label: '1.5×',  value: 1.5 },
+  { label: '2×',    value: 2.0 },
+]
+
+const COLOR_PRESETS = [
+  { label: 'Normal',    value: '' },
+  { label: 'Warm',      value: 'warm' },
+  { label: 'Cool',      value: 'cool' },
+  { label: 'Vivid',     value: 'vivid' },
+  { label: 'Cinematic', value: 'cinematic' },
+  { label: 'B&W',       value: 'bw' },
+  { label: 'Faded',     value: 'faded' },
+  { label: 'Night',     value: 'night' },
+]
+
 export default function TrimStep({
   clips,
   onAddClip,
@@ -63,6 +95,13 @@ export default function TrimStep({
   onEndCropEdit,
   onSourceVideoAR,
   sourceVideoUrl,
+  onUpdateClipSpeed,
+  onToggleClipFlip,
+  onUpdateClipColorPreset,
+  onToggleClipReverse,
+  onReorderClips,
+  onDetectSilence,
+  importJobId,
   disabled,
 }: TrimStepProps) {
   const [startSecs, setStartSecs] = useState(0)
@@ -72,6 +111,10 @@ export default function TrimStep({
   const [videoAR, setVideoAR] = useState<number | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const [focusedClipIndex, setFocusedClipIndex] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
+  const [silenceResults, setSilenceResults] = useState<Record<string, { loading: boolean; data: { start: number; end: number }[] | null }>>({})
+  const [waveformUrls, setWaveformUrls] = useState<Record<string, string>>({})
+  const dragFromIdx = useRef<number | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const cropCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -123,6 +166,17 @@ export default function TrimStep({
       setVideoAR(null)
     }
   }, [sourceVideoUrl])
+
+  // Load waveform images for trimmed clips
+  useEffect(() => {
+    if (!importJobId) return
+    for (const clip of clips) {
+      if (clip.trimStatus === 'done' && !waveformUrls[clip.id]) {
+        const url = `/api/waveform?jobId=${importJobId}&clipSuffix=${clip.clipSuffix}`
+        setWaveformUrls(prev => ({ ...prev, [clip.id]: url }))
+      }
+    }
+  }, [clips, importJobId, waveformUrls])
 
   const getSecsFromPointer = useCallback((e: MouseEvent | TouchEvent): number => {
     if (!timelineRef.current || durationRef.current === 0) return 0
@@ -466,11 +520,26 @@ export default function TrimStep({
                     onRemoveClip(clip.id)
                   }
                 }}
-                className={`bg-zinc-800/50 border rounded-lg px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-900 ${
-                  focusedClipIndex === idx ? 'border-zinc-600/50' : 'border-zinc-700/50'
+                draggable
+                onDragStart={() => { dragFromIdx.current = idx }}
+                onDragOver={e => { e.preventDefault(); setDragOverIdx(idx) }}
+                onDragLeave={() => setDragOverIdx(null)}
+                onDrop={e => {
+                  e.preventDefault()
+                  setDragOverIdx(null)
+                  if (dragFromIdx.current !== null && dragFromIdx.current !== idx) {
+                    onReorderClips(dragFromIdx.current, idx)
+                  }
+                  dragFromIdx.current = null
+                }}
+                onDragEnd={() => { setDragOverIdx(null); dragFromIdx.current = null }}
+                className={`bg-zinc-800/50 border rounded-lg px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-900 transition-all cursor-grab active:cursor-grabbing ${
+                  dragOverIdx === idx ? 'border-violet-500/60 bg-violet-600/5' : focusedClipIndex === idx ? 'border-zinc-600/50' : 'border-zinc-700/50'
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
+                  {/* Drag handle */}
+                  <span className="text-zinc-600 hover:text-zinc-400 cursor-grab active:cursor-grabbing flex-shrink-0 select-none" title="Drag to reorder">⠿</span>
                   {/* Label */}
                   {editingLabelId === clip.id ? (
                     <input
@@ -522,7 +591,7 @@ export default function TrimStep({
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M7 4v16M17 4v16M4 7h16M4 17h16" />
                       </svg>
-                      {!isFullFrame({ x: clip.cropX, y: clip.cropY, w: clip.cropW, h: clip.cropH }) ? 'Cropped' : 'Crop'}
+                      {cropEditClipId === clip.id ? 'Recrop' : !isFullFrame({ x: clip.cropX, y: clip.cropY, w: clip.cropW, h: clip.cropH }) ? 'Recrop' : 'Crop'}
                     </button>
                   )}
 
@@ -616,6 +685,89 @@ export default function TrimStep({
                       {zoomSelectClipId === clip.id ? 'Click preview →' : `Target: ${clip.zoomX}%,${clip.zoomY}%`}
                     </button>
                   )}
+                  {/* Flip buttons */}
+                  <button type="button" title="Flip horizontal"
+                    onClick={() => onToggleClipFlip(clip.id, 'flipH', !clip.flipH)}
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.flipH ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
+                    ↔
+                  </button>
+                  <button type="button" title="Flip vertical"
+                    onClick={() => onToggleClipFlip(clip.id, 'flipV', !clip.flipV)}
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.flipV ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
+                    ↕
+                  </button>
+                  {/* Reverse */}
+                  <button type="button" title="Play clip backwards"
+                    onClick={() => onToggleClipReverse(clip.id, !clip.reversed)}
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.reversed ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
+                    ↩
+                  </button>
+                </div>
+
+                {/* Waveform visualization */}
+                {clip.trimStatus === 'done' && waveformUrls[clip.id] && (
+                  <div className="mt-2 rounded overflow-hidden opacity-60 h-8 bg-zinc-900">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={waveformUrls[clip.id]}
+                      alt="Waveform"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+
+                {/* Silence detection */}
+                {clip.trimStatus === 'done' && (
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <button type="button"
+                      onClick={async () => {
+                        setSilenceResults(prev => ({ ...prev, [clip.id]: { loading: true, data: null } }))
+                        const result = await onDetectSilence(clip.id)
+                        setSilenceResults(prev => ({
+                          ...prev,
+                          [clip.id]: {
+                            loading: false,
+                            data: result?.silenceIntervals ?? null,
+                          }
+                        }))
+                      }}
+                      disabled={silenceResults[clip.id]?.loading}
+                      className="text-[11px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-all disabled:opacity-50"
+                    >
+                      {silenceResults[clip.id]?.loading ? 'Detecting…' : 'Detect silences'}
+                    </button>
+                    {silenceResults[clip.id]?.data && (
+                      <span className="text-[11px] text-zinc-500">
+                        {silenceResults[clip.id].data!.length === 0
+                          ? 'No silences found'
+                          : `${silenceResults[clip.id].data!.length} silent segment${silenceResults[clip.id].data!.length !== 1 ? 's' : ''} detected`}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Speed + Color row */}
+                <div className="mt-2 pt-2 border-t border-zinc-700/40 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-zinc-500 w-10 flex-shrink-0">Speed</span>
+                    {SPEED_OPTIONS.map(s => (
+                      <button key={s.value} type="button"
+                        onClick={() => onUpdateClipSpeed(clip.id, s.value)}
+                        className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.speed === s.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-zinc-500 w-10 flex-shrink-0">Color</span>
+                    {COLOR_PRESETS.map(p => (
+                      <button key={p.value} type="button"
+                        onClick={() => onUpdateClipColorPreset(clip.id, p.value)}
+                        className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.colorPreset === p.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* ── Crop editor ── */}

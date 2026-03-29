@@ -32,6 +32,20 @@ export interface ExportOptions {
   zoomEnabled?: boolean   // slow zoom-in toward zoomX,zoomY over clip duration
   zoomX?: number          // 0-100 percent of frame width (zoom target)
   zoomY?: number          // 0-100 percent of frame height (zoom target)
+  speed?: number          // playback speed multiplier: 0.25, 0.5, 1.0, 1.5, 2.0
+  flipH?: boolean         // horizontal mirror
+  flipV?: boolean         // vertical flip
+  colorPreset?: string    // 'warm'|'cool'|'vivid'|'cinematic'|'bw'|'faded'|'night'|''
+  reversed?: boolean      // play clip backwards (reverse + areverse)
+  // Auto-duck: lower bg music volume when speech is detected
+  audioDuckEnabled?: boolean
+  audioDuckVolume?: number  // 0-1, target music volume during speech (default 0.3)
+  // Lower thirds
+  lowerThirdEnabled?: boolean
+  lowerThirdName?: string
+  lowerThirdSubtitle?: string
+  lowerThirdTemplate?: 'clean-line' | 'dark-chip' | 'broadcast'
+  lowerThirdDuration?: number  // seconds to show (default 5)
   // Output resolution (defaults to 1080x1920 for backwards compatibility)
   outputWidth?: number    // pixels — must be even
   outputHeight?: number   // pixels — must be even
@@ -70,6 +84,43 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   const outW = opts.outputWidth ?? 1080
   const outH = opts.outputHeight ?? 1920
 
+  // ── Pre-processing: speed change and/or flip (applied before format/scale step) ──
+  const speed = opts.speed ?? 1.0
+  const needsPreProcess = (speed !== 1.0) || opts.flipH || opts.flipV
+  let videoSrcLabel = '[0:v]'
+  let audioSrcLabel = '[0:a]'
+
+  // Reverse clip (reverse + areverse) — must come before other filters
+  if (opts.reversed) {
+    filterParts.push(`[0:v]reverse[vrev]`)
+    filterParts.push(`[0:a]areverse[arev]`)
+    videoSrcLabel = '[vrev]'
+    audioSrcLabel = '[arev]'
+  }
+
+  if (needsPreProcess) {
+    const preParts: string[] = []
+    if (speed !== 1.0) preParts.push(`setpts=PTS/${speed.toFixed(4)}`)
+    if (opts.flipH) preParts.push('hflip')
+    if (opts.flipV) preParts.push('vflip')
+    filterParts.push(`${videoSrcLabel}${preParts.join(',')}[vpre]`)
+    videoSrcLabel = '[vpre]'
+
+    // Audio speed via atempo (valid range 0.5–2.0 per filter; chain for extreme values)
+    if (speed !== 1.0) {
+      const atempoChain = buildAtempoChain(speed)
+      filterParts.push(`${audioSrcLabel}${atempoChain}[aspre]`)
+      audioSrcLabel = '[aspre]'
+    }
+  }
+
+  // ── Color preset (eq filter on source video) ──
+  const colorEq = buildColorEqFilter(opts.colorPreset)
+  if (colorEq) {
+    filterParts.push(`${videoSrcLabel}${colorEq}[vcol]`)
+    videoSrcLabel = '[vcol]'
+  }
+
   // Base scale/crop to outW×outH, with optional format transform
   const fmt   = opts.videoFormat ?? 'standard'
   const scale = Math.max(20, Math.min(150, opts.socialVideoScale ?? 70)) / 100
@@ -81,7 +132,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   if (fmt === 'social-post') {
     // Scale down, pad with solid background, then overlay at offset position
     filterParts.push(
-      `[0:v]scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},` +
+      `${videoSrcLabel}scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},` +
       `scale=round(iw*${scale}/2)*2:round(ih*${scale}/2)*2[vsmall];` +
       `color=c=0x${bgHex}:size=${outW}x${outH}:r=30000/1001,format=yuv420p[bg];` +
       `[bg][vsmall]overlay=${overlayExpr}[sv]`
@@ -93,7 +144,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     const cinBgHex = (opts.cinematicBgColor ?? '000000').replace('#', '')
     const cinBg = `0x${cinBgHex}`
     filterParts.push(
-      `[0:v]scale=${outW}:${outH}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
+      `${videoSrcLabel}scale=${outW}:${outH}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
       `pad=${outW}:${outH}:(ow-iw)/2:(oh-ih)/2:color=${cinBg},format=yuv420p,` +
       `drawbox=x=0:y=0:w=${outW}:h=${barPx}:color=${cinBgHex}@1.0:t=fill,` +
       `drawbox=x=0:y=${outH - barPx}:w=${outW}:h=${barPx}:color=${cinBgHex}@1.0:t=fill[sv]`
@@ -107,7 +158,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     const vidHEven = vidH % 2 === 0 ? vidH : vidH - 1
     const barPxFinal = (outH - vidHEven) / 2
     filterParts.push(
-      `[0:v]split=2[raw1][raw2];` +
+      `${videoSrcLabel}split=2[raw1][raw2];` +
       `[raw1]scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},scale=trunc(iw/4)*2:trunc(ih/4)*2,boxblur=5:2,scale=${outW}:${outH},format=yuv420p[bg];` +
       `[raw2]scale=w=${outW}:h=${vidHEven}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
       `pad=${outW}:${vidHEven}:(ow-iw)/2:(oh-ih)/2,format=yuv420p[fg];` +
@@ -117,7 +168,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     // standard (Regular): fit within outW×outH with configurable padding color, no distortion
     const stdBg = `0x${(opts.standardBgColor ?? '000000').replace('#', '')}`
     filterParts.push(
-      `[0:v]scale=${outW}:${outH}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${outW}:${outH}:(ow-iw)/2:(oh-ih)/2:color=${stdBg},format=yuv420p[sv]`
+      `${videoSrcLabel}scale=${outW}:${outH}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${outW}:${outH}:(ow-iw)/2:(oh-ih)/2:color=${stdBg},format=yuv420p[sv]`
     )
   }
 
@@ -164,6 +215,47 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   if (emojiOverlayIdx !== null) {
     filterParts.push(`${lastVideoLabel}[${emojiOverlayIdx}:v]overlay=0:0:format=auto[ov_emoji]`)
     lastVideoLabel = '[ov_emoji]'
+  }
+
+  // Lower thirds (drawtext before subtitle layers)
+  if (opts.lowerThirdEnabled && opts.lowerThirdName) {
+    const ltDur  = Math.max(1, opts.lowerThirdDuration ?? 5)
+    const enable = `enable='between(t,0,${ltDur})'`
+    const safeName = opts.lowerThirdName.replace(/'/g, "'\\''")
+    const safeSub  = (opts.lowerThirdSubtitle ?? '').replace(/'/g, "'\\''")
+    const tmpl = opts.lowerThirdTemplate ?? 'dark-chip'
+    const nameY = tmpl === 'broadcast' ? Math.round(outH * 0.82) : Math.round(outH * 0.85)
+    const subY  = nameY + Math.round(outH * 0.045)
+    if (tmpl === 'dark-chip') {
+      filterParts.push(
+        `${lastVideoLabel}drawtext=text='${safeName}':fontsize=${Math.round(outW * 0.042)}:fontcolor=white:` +
+        `box=1:boxcolor=black@0.65:boxborderw=12:x=(w-text_w)/2:y=${nameY}:${enable}[lt0]`
+      )
+    } else if (tmpl === 'clean-line') {
+      filterParts.push(
+        `${lastVideoLabel}drawtext=text='${safeName}':fontsize=${Math.round(outW * 0.042)}:fontcolor=white:` +
+        `x=(w-text_w)/2:y=${nameY}:${enable}[lt0]`
+      )
+    } else {
+      // broadcast: name + subtitle, left-aligned at 8% from left
+      const lx = Math.round(outW * 0.08)
+      filterParts.push(
+        `${lastVideoLabel}drawtext=text='${safeName}':fontsize=${Math.round(outW * 0.042)}:fontcolor=white:` +
+        `box=1:boxcolor=black@0.65:boxborderw=10:x=${lx}:y=${nameY}:${enable},` +
+        `drawtext=text='${safeSub}':fontsize=${Math.round(outW * 0.032)}:fontcolor=white@0.8:` +
+        `x=${lx}:y=${subY}:${enable}[lt0]`
+      )
+    }
+    if (tmpl !== 'broadcast' && safeSub) {
+      const lx = Math.round(outW * 0.5)
+      filterParts.push(
+        `[lt0]drawtext=text='${safeSub}':fontsize=${Math.round(outW * 0.032)}:fontcolor=white@0.8:` +
+        `x=${lx}-text_w/2:y=${subY}:${enable}[lt1]`
+      )
+      lastVideoLabel = '[lt1]'
+    } else {
+      lastVideoLabel = '[lt0]'
+    }
   }
 
   // Subtitle layers — burned sequentially
@@ -214,9 +306,9 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     const aParts: string[] = [`volume=${origVol}`]
     if (opts.fadeIn)  aParts.push(`afade=t=in:st=0:d=1`)
     if (opts.fadeOut) aParts.push(`afade=t=out:st=${Math.max(0, dur - 1).toFixed(3)}:d=1`)
-    audioFilters.push(`[0:a]${aParts.join(',')}[a0]`)
+    audioFilters.push(`${audioSrcLabel}${aParts.join(',')}[a0]`)
   } else {
-    audioFilters.push(`[0:a]volume=${origVol}[a0]`)
+    audioFilters.push(`${audioSrcLabel}volume=${origVol}[a0]`)
   }
   audioStreamLabels.push('[a0]')
 
@@ -227,10 +319,14 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     audioStreamLabels.push('[a1]')
   }
 
-  // Background music
+  // Background music (with optional auto-duck)
   if (bgMusicIdx !== null) {
-    const musicVol = Math.max(0, Math.min(1, opts.bgMusicVolume ?? 0.7)).toFixed(2)
     const dur = Math.max(1, opts.clipDuration ?? 10)
+    // When auto-duck is enabled, reduce music to duck volume instead of normal volume
+    const effectiveVol = opts.audioDuckEnabled
+      ? Math.max(0.05, Math.min(0.9, opts.audioDuckVolume ?? 0.3))
+      : Math.max(0, Math.min(1, opts.bgMusicVolume ?? 0.7))
+    const musicVol = effectiveVol.toFixed(2)
     const mParts: string[] = [`volume=${musicVol}`]
     if (opts.bgMusicFadeIn)  mParts.push(`afade=t=in:st=0:d=1`)
     if (opts.bgMusicFadeOut) mParts.push(`afade=t=out:st=${Math.max(0, dur - 1).toFixed(3)}:d=1`)
@@ -238,7 +334,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     audioStreamLabels.push('[am]')
   }
 
-  // Mix all streams; if only one stream, rename it [aout] directly
+  // Mix all streams; if only one stream use it directly (skip anull no-op)
   let audioOutLabel = ''
   if (audioStreamLabels.length > 1) {
     audioFilters.push(
@@ -246,9 +342,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     )
     audioOutLabel = '[aout]'
   } else {
-    // Single stream — just alias it
-    audioFilters.push(`[a0]anull[aout]`)
-    audioOutLabel = '[aout]'
+    audioOutLabel = '[a0]'
   }
 
   const allFilters = [...filterParts, ...audioFilters]
@@ -262,10 +356,25 @@ export function buildExportArgs(opts: ExportOptions): string[] {
 
   args.push('-map', audioOutLabel)
 
+  // Use Apple VideoToolbox hardware encoder on macOS (M-series: ~4-5× faster than libx264).
+  // -allow_sw 1 falls back to software if VT is unavailable (non-Mac or unsupported GPU).
+  // Quality: VT q:v 65 ≈ libx264 crf 23 (VT scale: 0=best, 100=worst).
+  const isMac = process.platform === 'darwin'
+  if (isMac) {
+    args.push(
+      '-c:v', 'h264_videotoolbox',
+      '-q:v', '65',
+      '-allow_sw', '1',
+    )
+  } else {
+    args.push(
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-crf', '23',
+      '-threads', '0',  // 0 = use all available CPU cores
+    )
+  }
   args.push(
-    '-c:v', 'libx264',
-    '-preset', 'veryfast',
-    '-crf', '23',
     '-c:a', 'aac',
     '-b:a', '192k',
     '-movflags', '+faststart',
@@ -300,13 +409,16 @@ export function buildTrimArgs(opts: {
   vfParts.push(`scale=trunc(iw/2)*2:trunc(ih/2)*2`)
   vfParts.push(`format=yuv420p`)
 
+  // -ss before -i = container-level fast seek (instant for any start time).
+  // Tradeoff: may land up to ~1 keyframe interval off — not noticeable in a video editor.
+  // -ss after -i = slow decode-from-start (penalises long source videos heavily).
   return [
-    '-i', opts.inputVideo,
     '-ss', String(opts.startSeconds),
+    '-i', opts.inputVideo,
     '-t', String(opts.durationSeconds),
     '-vf', vfParts.join(','),
     '-c:v', 'libx264',
-    '-preset', 'fast',
+    '-preset', 'ultrafast',   // intermediate file — nobody sees this, speed > quality
     '-crf', '23',
     '-c:a', 'aac',
     '-b:a', '192k',
@@ -385,4 +497,46 @@ export function formatASSTime(secs: number): string {
   const m = Math.floor((secs % 3600) / 60)
   const s = secs % 60
   return `${h}:${String(m).padStart(2, '0')}:${String(s.toFixed(2)).padStart(5, '0')}`
+}
+
+// ── Helpers for speed and color preset filters ────────────────────────────────
+
+/**
+ * Build an atempo filter chain for a given speed multiplier.
+ * atempo only accepts 0.5–2.0 per stage; chain for extreme values.
+ */
+function buildAtempoChain(speed: number): string {
+  const stages: string[] = []
+  let remaining = speed
+  if (remaining < 0.5) {
+    // e.g. 0.25 = atempo=0.5,atempo=0.5
+    while (remaining < 0.5) {
+      stages.push('atempo=0.5')
+      remaining /= 0.5
+    }
+  } else if (remaining > 2.0) {
+    while (remaining > 2.0) {
+      stages.push('atempo=2.0')
+      remaining /= 2.0
+    }
+  }
+  stages.push(`atempo=${remaining.toFixed(4)}`)
+  return stages.join(',')
+}
+
+/**
+ * Build an FFmpeg eq filter string for a named color preset.
+ * Returns empty string for 'normal'/undefined (no filter needed).
+ */
+function buildColorEqFilter(preset: string | undefined): string {
+  switch (preset) {
+    case 'warm':      return 'eq=contrast=1.05:brightness=0.02:saturation=1.2:gamma_r=1.1:gamma_b=0.9'
+    case 'cool':      return 'eq=contrast=1.05:brightness=0.0:saturation=1.1:gamma_r=0.9:gamma_b=1.1'
+    case 'vivid':     return 'eq=contrast=1.15:brightness=0.03:saturation=1.6'
+    case 'cinematic': return 'eq=contrast=1.1:brightness=-0.02:saturation=0.85:gamma=0.95'
+    case 'bw':        return 'hue=s=0,eq=contrast=1.1:brightness=0.0'
+    case 'faded':     return 'eq=contrast=0.85:brightness=0.08:saturation=0.7'
+    case 'night':     return 'eq=contrast=1.2:brightness=-0.08:saturation=0.9:gamma_b=1.2'
+    default:          return ''
+  }
 }

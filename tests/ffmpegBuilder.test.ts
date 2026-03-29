@@ -107,7 +107,9 @@ describe('buildExportArgs', () => {
     // Should map video and audio via filter_complex
     const mapIdx = args.indexOf('-map')
     expect(args[mapIdx + 1]).toBe('[vout]')
-    expect(args).toContain('[aout]')
+    // Single audio stream: mapped as [a0] directly (no anull no-op pass-through)
+    const audioMapLabel = args[args.lastIndexOf('-map') + 1]
+    expect(audioMapLabel).toMatch(/^\[a/)
     expect(args[args.length - 1]).toBe('/tmp/final.mp4')
   })
 

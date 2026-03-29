@@ -31,8 +31,7 @@ router.post('/', async (req, res) => {
 
   res.json({ jobId })
 
-  // Run download in background queue
-  jobManager.enqueue(async () => {
+  jobManager.enqueueIO(async () => {
     try {
       jobManager.sendProgress(jobId, { type: 'progress', stage: 'downloading', percent: 0 })
 
