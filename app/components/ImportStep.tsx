@@ -31,7 +31,7 @@ export default function ImportStep({ status, progress, error, videoUrl, importJo
           </label>
           <input
             id="video-url"
-            type="url"
+            type="text"
             value={urlInput}
             onChange={e => setUrlInput(e.target.value)}
             placeholder="https://www.youtube.com/watch?v=..."
