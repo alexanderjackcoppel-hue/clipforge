@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { join } from 'path'
 import { mkdirSync } from 'fs'
-import { v4 as uuidv4 } from 'uuid'
+import { jobManager } from '../lib/jobManager.js'
 import { spawnJob } from '../lib/spawnJob.js'
 import { TMP_DIR } from '../index.js'
 
@@ -18,7 +18,7 @@ router.post('/', async (req, res) => {
   const trimmed = text.trim().slice(0, 5000)
   const safeVoice = /^[A-Za-z ]+$/.test(voice ?? '') ? voice! : 'Samantha'
 
-  const jobId = uuidv4()
+  const jobId = jobManager.createJob()
   const dir = join(TMP_DIR, jobId)
   mkdirSync(dir, { recursive: true })
 
@@ -30,9 +30,11 @@ router.post('/', async (req, res) => {
     await spawnJob('say', ['-v', safeVoice, '-o', aiffPath, '--', trimmed])
     // Convert AIFF → WAV (44.1kHz stereo) so browsers play it natively
     await spawnJob('ffmpeg', ['-i', aiffPath, '-ar', '44100', '-ac', '2', '-y', wavPath])
+    jobManager.sendProgress(jobId, { type: 'done', stage: 'tts', percent: 100, url: `/files/${jobId}/audio.wav` })
     res.json({ url: `/files/${jobId}/audio.wav` })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'TTS failed'
+    jobManager.sendProgress(jobId, { type: 'error', message: msg })
     res.status(500).json({ error: msg })
   }
 })

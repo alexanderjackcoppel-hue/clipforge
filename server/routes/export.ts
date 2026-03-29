@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { join } from 'path'
-import { existsSync, writeFileSync } from 'fs'
+import { existsSync, writeFileSync, utimesSync } from 'fs'
 import multer from 'multer'
 import { jobManager, isValidJobId } from '../lib/jobManager.js'
 import { buildExportArgs, buildASSSubtitles, type SubtitleLine, type SubtitleStyle } from '../lib/ffmpegBuilder.js'
@@ -230,6 +230,12 @@ router.post('/', (req, res) => {
 
     const opJobId = jobManager.createJob()
     res.json({ jobId: opJobId })
+
+    // Touch the importJobId directory so the cleanup sweeper's 2-hour mtime
+    // clock resets. The export job (opJobId) may wait in the render queue for
+    // a while; without this, the sweeper could delete the source files before
+    // the export runs.
+    try { const now = new Date(); utimesSync(jobDir, now, now) } catch { /* ignore */ }
 
     jobManager.enqueueRender(async () => {
       try {

@@ -221,8 +221,8 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   if (opts.lowerThirdEnabled && opts.lowerThirdName) {
     const ltDur  = Math.max(1, opts.lowerThirdDuration ?? 5)
     const enable = `enable='between(t,0,${ltDur})'`
-    const safeName = opts.lowerThirdName.replace(/'/g, "'\\''")
-    const safeSub  = (opts.lowerThirdSubtitle ?? '').replace(/'/g, "'\\''")
+    const safeName = escapeDrawtext(opts.lowerThirdName)
+    const safeSub  = escapeDrawtext(opts.lowerThirdSubtitle ?? '')
     const tmpl = opts.lowerThirdTemplate ?? 'dark-chip'
     const nameY = tmpl === 'broadcast' ? Math.round(outH * 0.82) : Math.round(outH * 0.85)
     const subY  = nameY + Math.round(outH * 0.045)
@@ -539,4 +539,21 @@ function buildColorEqFilter(preset: string | undefined): string {
     case 'night':     return 'eq=contrast=1.2:brightness=-0.08:saturation=0.9:gamma_b=1.2'
     default:          return ''
   }
+}
+
+/**
+ * Escape a string for use in an ffmpeg drawtext `text=` option.
+ * The text is embedded inside single quotes in the filter_complex string:
+ *   drawtext=text='<value>'
+ * Within single-quoted ffmpeg filter values, backslash is the escape char.
+ * `:` must also be escaped because it separates filter options at parse level.
+ * `[` and `]` are filter-graph metacharacters that must be escaped inside values.
+ */
+export function escapeDrawtext(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')  // backslash first
+    .replace(/'/g, "\\'")    // single quote
+    .replace(/:/g, '\\:')    // option separator
+    .replace(/\[/g, '\\[')   // filter-graph label open
+    .replace(/\]/g, '\\]')   // filter-graph label close
 }

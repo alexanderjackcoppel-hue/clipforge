@@ -35,7 +35,7 @@ export type QueueType = 'io' | 'render' | 'ai'
 //   ai     — transcription + analysis (Whisper, Claude) → 1 concurrent
 const QUEUE_LIMITS: Record<QueueType, number> = { io: 2, render: 2, ai: 1 }
 
-class JobManager {
+export class JobManager {
   private jobs = new Map<string, JobState>()
   private clients = new Map<string, Response[]>()
   private queues: Record<QueueType, Array<{ fn: JobFn; resolve: () => void; reject: (e: Error) => void }>> = {
