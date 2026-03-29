@@ -32,6 +32,7 @@ export default function ImportStep({ status, progress, error, videoUrl, importJo
           <input
             id="video-url"
             type="text"
+            autoComplete="off"
             value={urlInput}
             onChange={e => setUrlInput(e.target.value)}
             placeholder="https://www.youtube.com/watch?v=..."
