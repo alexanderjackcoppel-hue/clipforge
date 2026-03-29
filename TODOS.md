@@ -1,5 +1,15 @@
 # TODOS
 
+## Route integration tests
+**What:** Add supertest-based integration tests for the Express route error paths (download, trim, export, transcribe).
+**Why:** Current tests cover regex validation in isolation but not the actual route handlers — file existence checks, error classification, job creation, and response shapes are all untested. A route refactor could silently break the API.
+**Pros:** Catches regressions in route logic, not just regex logic.
+**Cons:** Requires spinning up Express in test and mocking filesystem/ffmpeg. ~1.5h CC work.
+**Context:** See `server/routes/*.ts`. Focus on error paths: missing trimmed video, invalid jobId, malformed body. Happy path is covered by manual testing.
+**Depends on:** None.
+
+---
+
 ## Non-YouTube download progress verification
 **What:** Manually verify that yt-dlp download progress (the `[download] X%` regex) fires correctly for Instagram Reels and TikTok URLs — not just YouTube.
 **Why:** The regex fires on yt-dlp's standard output format, which should be platform-agnostic, but this has never been verified for non-YouTube sources.

@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest'
 
 const CLIP_SUFFIX_RE = /^[0-9a-f]{8}$/
 const HEX6_RE = /^[0-9A-Fa-f]{6}$/
-const ALLOWED_FILE_RE = /^(source|trimmed|final|audio)(_[0-9a-f]{8})?\.(mp4|wav)$/
+const ALLOWED_FILE_RE = /^(source|trimmed|final|audio|waveform)(_[0-9a-f]{8})?\.(mp4|wav|png)$/
 
 describe('clipSuffix validation (trim.ts, transcribe.ts, export.ts)', () => {
   it('accepts exactly 8 lowercase hex characters', () => {
@@ -74,12 +74,14 @@ describe('static file allowlist regex (server/index.ts)', () => {
     expect(ALLOWED_FILE_RE.test('trimmed.mp4')).toBe(true)
     expect(ALLOWED_FILE_RE.test('final.mp4')).toBe(true)
     expect(ALLOWED_FILE_RE.test('audio.wav')).toBe(true)
+    expect(ALLOWED_FILE_RE.test('waveform.png')).toBe(true)
   })
 
   it('accepts suffixed file names', () => {
     expect(ALLOWED_FILE_RE.test('trimmed_a3f2c1b9.mp4')).toBe(true)
     expect(ALLOWED_FILE_RE.test('final_deadbeef.mp4')).toBe(true)
     expect(ALLOWED_FILE_RE.test('audio_00000000.wav')).toBe(true)
+    expect(ALLOWED_FILE_RE.test('waveform_a3f2c1b9.png')).toBe(true)
   })
 
   it('rejects path traversal attempts', () => {
