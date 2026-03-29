@@ -1,7 +1,6 @@
 'use client'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import StepCard from './components/StepCard'
 import ImportStep from './components/ImportStep'
 import TrimStep from './components/TrimStep'
 import SubtitlesStep from './components/SubtitlesStep'
@@ -1220,6 +1219,8 @@ export default function HomePage() {
             onExportClip={handleExportClip}
             onExportAll={handleExportAll}
             disabled={!anyTrimDone}
+            outputWidth={outputWidth}
+            outputHeight={outputHeight}
           />
         )
     }

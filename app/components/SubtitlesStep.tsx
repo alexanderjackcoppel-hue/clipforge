@@ -222,6 +222,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
 
   return (
     <div className={`space-y-4 ${disabled ? 'pointer-events-none opacity-60' : ''}`}>
+      <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Subtitles</p>
       {/* Clip selector */}
       {clips.length > 1 && (
         <div className="flex items-center gap-2">

@@ -79,6 +79,7 @@ export default function OverlayStep({
 
   return (
     <div className={`space-y-4 ${disabled ? 'pointer-events-none' : ''}`}>
+      <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Overlay</p>
       {/* Toggle */}
       <div className="flex items-center gap-3">
         <button
@@ -145,7 +146,7 @@ export default function OverlayStep({
           <div className="space-y-1.5">
             <div className="flex justify-between text-sm text-zinc-300">
               <label>Size</label>
-              <span className="text-zinc-400">{overlayScale}%</span>
+              <span className="text-zinc-400 font-mono">{overlayScale}%</span>
             </div>
             <input
               type="range"

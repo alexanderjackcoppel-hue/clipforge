@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.1 — 2026-03-29
+
+### Bug Fixes
+- **escapeDrawtext** — lower-third name/subtitle text with ffmpeg filter metacharacters (`:`, `[`, `]`, `'`, `\`) was not escaped, producing broken filter_complex strings. Now correctly escaped in `buildExportArgs` via a dedicated `escapeDrawtext()` helper that handles backslash-first ordering to avoid double-escaping.
+- **spawnJob stdout/stderr buffer cap** — long-running jobs (multi-hour exports) could accumulate unbounded output in memory. Buffer is now capped at 512KB; streaming callbacks still receive full data.
+- **Export cleanup race** — the 2-hour mtime cleanup sweeper could delete source files before a queued export job started. `utimesSync` now touches the job directory when the export is enqueued, resetting the clock.
+- **TTS job tracking** — TTS route now uses `jobManager.createJob()` instead of raw `uuidv4()`, bringing TTS jobs into the job lifecycle and allowing future SSE progress reporting.
+
+### Tests
+- `escapeDrawtext` — 7 regression tests covering plain text, backslash, single quote, colon, square brackets, and combined metacharacters
+- `JobManager` — 16 new tests covering queue concurrency (io/render/ai limits), job lifecycle (createJob, sendProgress, getJob), SSE event replay for late-connecting clients, and pruneJob/getActiveJobIds
+- `routeValidation` — fixed stale `ALLOWED_FILE_RE` regex (missing `waveform`/`.png`), added 2 new waveform test cases
+
+### Design
+- All step panels now have consistent section headings (`Import`, `Trim`, `Subtitles`, `Audio`, `Overlay`, `Export`) matching the existing `Platform` heading style
+- All percentage values (`font-mono`) — download progress, trim progress, export progress, volume controls, overlay size — now use `font-mono` per DESIGN.md
+- `ExportStep` now accepts `outputWidth`/`outputHeight` props wired from the platform preset; no longer hardcodes `1080×1920`
+- Removed dead `import StepCard` from `page.tsx`
+
 ## 1.1.0 — 2026-03-28
 
 ### Features

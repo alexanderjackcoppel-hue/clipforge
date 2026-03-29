@@ -350,6 +350,7 @@ export default function TrimStep({
 
   return (
     <div className={`space-y-4 ${disabled ? 'pointer-events-none' : ''}`}>
+      <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Trim</p>
       {/* Source video + timeline scrubber */}
       {sourceVideoUrl && (
         <div className="space-y-3">
@@ -604,7 +605,7 @@ export default function TrimStep({
                           style={{ width: `${clip.trimProgress}%` }}
                         />
                       </div>
-                      <span className="text-xs text-zinc-400">{clip.trimProgress}%</span>
+                      <span className="text-xs text-zinc-400 font-mono">{clip.trimProgress}%</span>
                     </div>
                   ) : clip.trimStatus === 'done' ? (
                     <span className="text-xs text-emerald-400 font-medium">✓</span>

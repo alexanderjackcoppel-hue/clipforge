@@ -24,6 +24,7 @@ export default function ImportStep({ status, progress, error, videoUrl, importJo
 
   return (
     <div className="space-y-4">
+      <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Import</p>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
           <label htmlFor="video-url" className="block text-sm font-medium text-zinc-400 mb-1.5">
@@ -69,7 +70,7 @@ export default function ImportStep({ status, progress, error, videoUrl, importJo
         <div className="space-y-1">
           <div className="flex justify-between text-xs text-zinc-400">
             <span>Downloading...</span>
-            <span>{progress}%</span>
+            <span className="font-mono">{progress}%</span>
           </div>
           <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Download progress">
             <div
