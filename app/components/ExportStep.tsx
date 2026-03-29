@@ -12,9 +12,11 @@ interface ExportStepProps {
   onExportClip: (clipId: string) => void
   onExportAll: () => void
   disabled: boolean
+  outputWidth?: number
+  outputHeight?: number
 }
 
-export default function ExportStep({ clips, onExportClip, onExportAll, disabled }: ExportStepProps) {
+export default function ExportStep({ clips, onExportClip, onExportAll, disabled, outputWidth = 1080, outputHeight = 1920 }: ExportStepProps) {
   const trimmedClips = clips.filter(c => c.trimStatus === 'done')
   const exportableClips = trimmedClips.filter(
     c => c.exportStatus !== 'done' && c.exportStatus !== 'loading'
@@ -30,7 +32,8 @@ export default function ExportStep({ clips, onExportClip, onExportAll, disabled 
 
   return (
     <div className={`space-y-4 ${disabled ? 'pointer-events-none' : ''}`}>
-      <p className="text-xs text-zinc-500">1080×1920 · H.264 · AAC · MP4</p>
+      <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Export</p>
+      <p className="text-xs text-zinc-500"><span className="font-mono">{outputWidth}×{outputHeight}</span> · H.264 · AAC · MP4</p>
 
       {/* Export All button — only when multiple clips are exportable */}
       {exportableClips.length > 1 && (
@@ -66,7 +69,7 @@ export default function ExportStep({ clips, onExportClip, onExportAll, disabled 
                       style={{ width: `${clip.exportProgress}%` }}
                     />
                   </div>
-                  <span className="text-xs text-zinc-400 w-8 text-right">{clip.exportProgress}%</span>
+                  <span className="text-xs text-zinc-400 font-mono w-8 text-right">{clip.exportProgress}%</span>
                 </div>
               ) : clip.exportStatus === 'done' && clip.exportUrl ? (
                 <div className="flex items-center gap-2">

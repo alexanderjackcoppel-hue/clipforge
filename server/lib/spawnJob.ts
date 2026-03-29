@@ -1,6 +1,10 @@
 import { spawn } from 'child_process'
 
 const TIMEOUT_MS = 30 * 60 * 1000
+// Maximum bytes kept in the stderr/stdout accumulation buffer.
+// Callers using onStdout/onStderr callbacks receive full streaming data regardless.
+// The buffer is only used for the final error message and resolve value.
+const MAX_BUF_BYTES = 512 * 1024 // 512KB
 
 export async function spawnJob(
   cmd: string,
@@ -32,12 +36,12 @@ export async function spawnJob(
 
     child.stdout.on('data', (d: Buffer) => {
       const t = d.toString()
-      stdout += t
+      if (stdout.length < MAX_BUF_BYTES) stdout += t
       opts.onStdout?.(t)
     })
     child.stderr.on('data', (d: Buffer) => {
       const t = d.toString()
-      stderr += t
+      if (stderr.length < MAX_BUF_BYTES) stderr += t
       opts.onStderr?.(t)
     })
     child.on('error', (err: NodeJS.ErrnoException) => {

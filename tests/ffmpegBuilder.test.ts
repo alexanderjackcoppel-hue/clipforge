@@ -5,6 +5,7 @@ import {
   buildExportArgs,
   buildASSSubtitles,
   formatASSTime,
+  escapeDrawtext,
   type SubtitleLine,
   type SubtitleStyle,
 } from '../server/lib/ffmpegBuilder.js'
@@ -228,5 +229,41 @@ describe('buildASSSubtitles', () => {
     expect(ass).toContain('Hello world')
     expect(ass).toContain('Second line')
     expect((ass.match(/^Dialogue:/gm) ?? []).length).toBe(2)
+  })
+})
+
+// ─── escapeDrawtext ───────────────────────────────────────────────────────────
+// Regression: lower-thirds names with ffmpeg filter metacharacters (colon,
+// brackets) were not escaped, breaking the filter_complex string silently.
+// Found by /plan-eng-review on 2026-03-29.
+
+describe('escapeDrawtext', () => {
+  it('leaves plain text unchanged', () => {
+    expect(escapeDrawtext('Hello World')).toBe('Hello World')
+    expect(escapeDrawtext('Alex Johnson')).toBe('Alex Johnson')
+  })
+
+  it('escapes backslash first (to avoid double-escaping)', () => {
+    // 'a\\b' is the string a\b — one backslash. Should become a\\b (two backslashes).
+    expect(escapeDrawtext('a\\b')).toBe('a\\\\b')
+    // backslash must be escaped before other chars to avoid double-escaping
+    expect(escapeDrawtext('a\\:b')).toBe('a\\\\\\:b')
+  })
+
+  it('escapes single quotes', () => {
+    expect(escapeDrawtext("it's")).toBe("it\\'s")
+  })
+
+  it('escapes colons (ffmpeg option separator)', () => {
+    expect(escapeDrawtext('Alex: CEO')).toBe('Alex\\: CEO')
+    expect(escapeDrawtext('Title: Sub')).toBe('Title\\: Sub')
+  })
+
+  it('escapes square brackets (filter-graph label chars)', () => {
+    expect(escapeDrawtext('Tom [Smith]')).toBe('Tom \\[Smith\\]')
+  })
+
+  it('handles combined metacharacters', () => {
+    expect(escapeDrawtext("[CEO]: it's Tom")).toBe("\\[CEO\\]\\: it\\'s Tom")
   })
 })

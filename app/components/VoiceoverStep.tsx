@@ -82,6 +82,7 @@ export default function VoiceoverStep({
 
   return (
     <div className={`space-y-5 ${disabled ? 'pointer-events-none' : ''}`}>
+      <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">Audio</p>
 
       {/* ── Original audio mute ── */}
       <div className="space-y-2">
@@ -98,7 +99,7 @@ export default function VoiceoverStep({
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-zinc-400">
               <label>Original volume</label>
-              <span>{Math.round(originalVolume * 100)}%</span>
+              <span className="font-mono">{Math.round(originalVolume * 100)}%</span>
             </div>
             <input
               type="range" min={0} max={1} step={0.01} value={originalVolume}
@@ -193,7 +194,7 @@ export default function VoiceoverStep({
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs text-zinc-400">
                 <label>Voiceover volume</label>
-                <span>{Math.round(voiceoverVolume * 100)}%</span>
+                <span className="font-mono">{Math.round(voiceoverVolume * 100)}%</span>
               </div>
               <input
                 type="range" min={0} max={1} step={0.01} value={voiceoverVolume}
@@ -239,7 +240,7 @@ export default function VoiceoverStep({
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs text-zinc-400">
                 <label>Music volume</label>
-                <span>{Math.round(bgMusicVolume * 100)}%</span>
+                <span className="font-mono">{Math.round(bgMusicVolume * 100)}%</span>
               </div>
               <input
                 type="range" min={0} max={1} step={0.01} value={bgMusicVolume}
