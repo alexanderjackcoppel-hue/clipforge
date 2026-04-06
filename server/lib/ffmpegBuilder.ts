@@ -310,7 +310,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
       filterParts.push(`[wm_glow]colorchannelmixer=rr=0:rg=0:rb=0:ra=1:gr=0:gg=0:gb=0:ga=1:br=0:bg=0:bb=0:ba=1:ar=0:ag=0:ab=0:aa=1,` +
         `geq=r=${Math.round(r * 255)}:g=${Math.round(g * 255)}:b=${Math.round(b * 255)}:a='alpha(X,Y)',` +
         `gblur=sigma=${wmStroke}${opacityFilter}[wm_shadow]`)
-      filterParts.push(`[wm_shadow][wm_orig]overlay=0:0${opacityFilter ? '' : ''}[wm]`)
+      filterParts.push(`[wm_shadow][wm_orig]overlay=0:0${opacityFilter}[wm]`)
     } else {
       filterParts.push(`[${watermarkIdx}:v]scale=${wmWidth}:-1${opacityFilter}[wm]`)
     }
@@ -344,7 +344,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
       filterParts.push(`[wm2_glow]colorchannelmixer=rr=0:rg=0:rb=0:ra=1:gr=0:gg=0:gb=0:ga=1:br=0:bg=0:bb=0:ba=1:ar=0:ag=0:ab=0:aa=1,` +
         `geq=r=${Math.round(r2 * 255)}:g=${Math.round(g2 * 255)}:b=${Math.round(b2 * 255)}:a='alpha(X,Y)',` +
         `gblur=sigma=${wm2Stroke}${opacityFilter2}[wm2_shadow]`)
-      filterParts.push(`[wm2_shadow][wm2_orig]overlay=0:0[wm2]`)
+      filterParts.push(`[wm2_shadow][wm2_orig]overlay=0:0${opacityFilter2}[wm2]`)
     } else {
       filterParts.push(`[${watermark2Idx}:v]scale=${wm2Width}:-1${opacityFilter2}[wm2]`)
     }
