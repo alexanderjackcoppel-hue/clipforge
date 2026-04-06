@@ -803,7 +803,7 @@ export default function PreviewPanel({
             <button
               type="button"
               onClick={onCropDone}
-              className="text-sm bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-lg px-5 py-2 transition-colors flex-shrink-0"
+              className="text-sm bg-violet-600 hover:bg-violet-500 btn-press text-white font-semibold rounded-lg px-5 py-2 transition-colors flex-shrink-0"
             >
               Done
             </button>

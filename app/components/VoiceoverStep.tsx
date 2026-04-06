@@ -161,7 +161,7 @@ export default function VoiceoverStep({
                   type="button"
                   onClick={handleGenerate}
                   disabled={!ttsScript.trim() || ttsStatus === 'loading'}
-                  className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-surface-3 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+                  className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 btn-press disabled:bg-surface-3 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
                 >
                   {ttsStatus === 'loading' ? (
                     <>
@@ -277,6 +277,93 @@ export default function VoiceoverStep({
                 <input type="checkbox" checked={bgMusicFadeOut} onChange={e => onBgMusicFadeOut(e.target.checked)} className="w-3.5 h-3.5 accent-violet-500" />
                 <span className="text-xs text-zinc-400">Fade out (1s)</span>
               </label>
+            </div>
+
+            {/* ── Audio Duck ── */}
+            <div className="space-y-3 bg-surface-1 rounded-xl p-3 border border-border">
+              <Toggle on={audioDuckEnabled} onToggle={() => onAudioDuckToggle(!audioDuckEnabled)} label="Audio ducking" />
+              {audioDuckEnabled && (
+                <div className="space-y-1.5 pl-1">
+                  <p className="text-[10px] text-zinc-600">Lowers music volume when voiceover or speech is detected.</p>
+                  <div className="flex justify-between text-xs text-zinc-400">
+                    <label>Duck to</label>
+                    <span className="font-mono">{Math.round(audioDuckVolume * 100)}%</span>
+                  </div>
+                  <input
+                    type="range" min={0} max={1} step={0.01} value={audioDuckVolume}
+                    onChange={e => onAudioDuckVolume(parseFloat(e.target.value))}
+                    className="w-full"
+                    aria-label="Audio duck volume"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-border" />
+
+      {/* ── Lower Third ── */}
+      <div className="space-y-4">
+        <Toggle on={lowerThirdEnabled} onToggle={() => onLowerThirdToggle(!lowerThirdEnabled)} label={lowerThirdEnabled ? 'Lower third on' : 'Lower third off'} />
+
+        {lowerThirdEnabled && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={lowerThirdName}
+                  onChange={e => onLowerThirdNameChange(e.target.value)}
+                  placeholder="Your Name"
+                  className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">Subtitle</label>
+                <input
+                  type="text"
+                  value={lowerThirdSubtitle}
+                  onChange={e => onLowerThirdSubtitleChange(e.target.value)}
+                  placeholder="Title or handle"
+                  className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Template</label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {['minimal', 'rounded', 'gradient', 'outline'].map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => onLowerThirdTemplateChange(t)}
+                    className={`text-[11px] px-3 py-1.5 rounded-lg border transition-all capitalize ${
+                      lowerThirdTemplate === t
+                        ? 'border-violet-500 bg-violet-600/20 text-violet-300'
+                        : 'border-border bg-surface-2 text-zinc-400 hover:border-bright hover:text-zinc-300'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs text-zinc-400">
+                <label>Duration</label>
+                <span className="font-mono">{lowerThirdDuration}s</span>
+              </div>
+              <input
+                type="range" min={1} max={15} step={0.5} value={lowerThirdDuration}
+                onChange={e => onLowerThirdDurationChange(parseFloat(e.target.value))}
+                className="w-full"
+                aria-label="Lower third duration"
+              />
             </div>
           </div>
         )}

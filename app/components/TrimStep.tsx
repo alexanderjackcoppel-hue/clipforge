@@ -500,7 +500,7 @@ export default function TrimStep({
                 setStartSecs(endSecs)
                 setEndSecs(newEnd > endSecs ? newEnd : Math.min(endSecs + 30, duration))
               }}
-              className="flex items-center gap-2 bg-surface-2 hover:bg-surface-3 border border-border text-zinc-200 font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+              className="flex items-center gap-2 btn-gradient btn-press text-white font-medium rounded-lg px-5 py-2.5 text-sm transition-colors shadow-md shadow-violet-600/20"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -672,34 +672,28 @@ export default function TrimStep({
                 )}
 
                 {/* Effects row: fade + zoom */}
-                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/40 flex-wrap">
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={clip.fadeIn}
-                      onChange={e => onToggleClipFade(clip.id, 'fadeIn', e.target.checked)}
-                      className="w-3.5 h-3.5 accent-violet-500"
-                    />
-                    <span className="text-[11px] text-zinc-400">Fade in</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={clip.fadeOut}
-                      onChange={e => onToggleClipFade(clip.id, 'fadeOut', e.target.checked)}
-                      className="w-3.5 h-3.5 accent-violet-500"
-                    />
-                    <span className="text-[11px] text-zinc-400">Fade out</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={clip.zoomEnabled}
-                      onChange={e => onToggleClipZoom(clip.id, e.target.checked)}
-                      className="w-3.5 h-3.5 accent-violet-500"
-                    />
-                    <span className="text-[11px] text-zinc-400">Zoom in</span>
-                  </label>
+                <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-border/40 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => onToggleClipFade(clip.id, 'fadeIn', !clip.fadeIn)}
+                    className={`text-[11px] px-2.5 py-1 rounded-full border transition-all select-none ${clip.fadeIn ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright hover:text-zinc-300'}`}
+                  >
+                    Fade in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onToggleClipFade(clip.id, 'fadeOut', !clip.fadeOut)}
+                    className={`text-[11px] px-2.5 py-1 rounded-full border transition-all select-none ${clip.fadeOut ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright hover:text-zinc-300'}`}
+                  >
+                    Fade out
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onToggleClipZoom(clip.id, !clip.zoomEnabled)}
+                    className={`text-[11px] px-2.5 py-1 rounded-full border transition-all select-none ${clip.zoomEnabled ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright hover:text-zinc-300'}`}
+                  >
+                    Zoom in
+                  </button>
                   {clip.zoomEnabled && (
                     <button
                       type="button"
@@ -734,7 +728,7 @@ export default function TrimStep({
 
                 {/* Waveform visualization */}
                 {clip.trimStatus === 'done' && waveformUrls[clip.id] && (
-                  <div className="mt-2 rounded overflow-hidden opacity-60 h-8 bg-surface-1">
+                  <div className="mt-3 rounded-lg overflow-hidden opacity-60 h-10 bg-surface-1">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={waveformUrls[clip.id]}
@@ -746,7 +740,7 @@ export default function TrimStep({
 
                 {/* Silence detection */}
                 {clip.trimStatus === 'done' && (
-                  <div className="mt-1.5 flex items-center gap-2">
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
                     <button type="button"
                       onClick={async () => {
                         setSilenceResults(prev => ({ ...prev, [clip.id]: { loading: true, data: null, speaking: null } }))
@@ -761,9 +755,12 @@ export default function TrimStep({
                         }))
                       }}
                       disabled={silenceResults[clip.id]?.loading}
-                      className="text-[11px] px-2 py-0.5 rounded border border-border bg-surface-2 text-zinc-400 hover:border-bright hover:text-zinc-200 transition-all disabled:opacity-50"
+                      className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-lg border border-border bg-surface-2 text-zinc-300 hover:border-bright hover:text-zinc-100 transition-all disabled:opacity-50"
                     >
-                      {silenceResults[clip.id]?.loading ? 'Detecting…' : 'Detect silences'}
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+                      </svg>
+                      {silenceResults[clip.id]?.loading ? 'Detecting...' : 'Detect silences'}
                     </button>
                     {silenceResults[clip.id]?.data && (
                       <span className="text-[11px] text-zinc-500">
@@ -783,8 +780,11 @@ export default function TrimStep({
                           }))
                           onAddClipsFromSegments(mapped)
                         }}
-                        className="text-[11px] px-2 py-0.5 rounded border border-violet-600/60 bg-violet-600/10 text-violet-300 hover:bg-violet-600/20 transition-all"
+                        className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-lg border border-violet-600/60 bg-violet-600/10 text-violet-300 hover:bg-violet-600/20 transition-all font-medium"
                       >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
                         Remove silences ({silenceResults[clip.id].speaking!.length} clips)
                       </button>
                     )}
@@ -930,7 +930,7 @@ export default function TrimStep({
                       <button
                         type="button"
                         onClick={() => onEndCropEdit()}
-                        className="text-xs bg-violet-600 hover:bg-violet-500 text-white font-medium rounded px-3 py-1 transition-colors"
+                        className="text-xs bg-violet-600 hover:bg-violet-500 btn-press text-white font-medium rounded px-3 py-1 transition-colors"
                       >
                         Done
                       </button>

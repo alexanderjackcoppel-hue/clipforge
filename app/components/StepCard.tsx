@@ -24,7 +24,7 @@ export default function StepCard({
       }`}
     >
       <div className="flex items-center gap-3 mb-5">
-        <span className="bg-violet-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold flex-shrink-0">
+        <span className="bg-gradient-to-br from-violet-500 to-violet-700 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold flex-shrink-0 shadow-sm shadow-violet-600/30">
           {number}
         </span>
         <h2 className="text-xl font-semibold text-zinc-100 flex-1 tracking-tight">{title}</h2>

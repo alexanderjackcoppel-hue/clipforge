@@ -287,7 +287,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
               <span className="text-xs text-zinc-500">Transcribes speech — no internet needed</span>
             </div>
             <button type="button" onClick={onGenerate} disabled={autoStatus === 'loading'}
-              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-surface-3 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 btn-press disabled:bg-surface-3 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
               {autoStatus === 'loading' ? (
                 <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Transcribing...</>
               ) : (

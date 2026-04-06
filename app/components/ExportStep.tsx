@@ -126,7 +126,7 @@ export default function ExportStep({ clips, onExportClip, onExportAll, disabled,
               onKeyDown={e => e.key === 'Enter' && handleSetFolder()}
             />
             <button type="button" onClick={handleSetFolder}
-              className="text-xs bg-violet-600 hover:bg-violet-500 text-white font-medium rounded-lg px-3 py-2 transition-colors whitespace-nowrap">
+              className="text-xs bg-violet-600 hover:bg-violet-500 btn-press text-white font-medium rounded-lg px-3 py-2 transition-colors whitespace-nowrap">
               Set
             </button>
           </div>
@@ -195,7 +195,7 @@ export default function ExportStep({ clips, onExportClip, onExportAll, disabled,
                           ? 'bg-emerald-700 text-white'
                           : saveStatus[clip.id] === 'error'
                             ? 'bg-red-800/60 text-red-300'
-                            : 'bg-violet-600 hover:bg-violet-500 text-white'
+                            : 'bg-violet-600 hover:bg-violet-500 btn-press text-white'
                       }`}
                     >
                       {saveStatus[clip.id] === 'saving' ? 'Saving...'
@@ -225,7 +225,7 @@ export default function ExportStep({ clips, onExportClip, onExportAll, disabled,
                 <button
                   type="button"
                   onClick={() => onExportClip(clip.id)}
-                  className="text-xs bg-violet-600 hover:bg-violet-500 text-white font-medium rounded px-3 py-1.5 transition-colors"
+                  className="text-xs bg-violet-600 hover:bg-violet-500 btn-press text-white font-medium rounded px-3 py-1.5 transition-colors"
                 >
                   Export
                 </button>

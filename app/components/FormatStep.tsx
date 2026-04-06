@@ -183,10 +183,10 @@ export default function FormatStep({
             role="radio"
             aria-checked={videoFormat === f.id}
             onClick={() => onFormatChange(f.id)}
-            className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all text-left ${
+            className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all text-left ${
               videoFormat === f.id
-                ? 'border-violet-500 bg-violet-600/10'
-                : 'border-border bg-surface-2/50 hover:border-bright'
+                ? 'border-violet-500 ring-2 ring-violet-500 bg-violet-600/10 shadow-md shadow-violet-600/10'
+                : 'border-border bg-surface-2/50 hover:border-zinc-500 hover:bg-surface-2 hover:shadow-sm'
             }`}
           >
             {f.icon}
