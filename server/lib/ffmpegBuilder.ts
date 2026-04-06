@@ -159,11 +159,13 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   const overlayExpr = `(W-w)/2+${offXpx}:(H-h)/2+${offYpx}`
 
   if (fmt === 'social-post') {
-    // Scale video to fit within the scaled area, preserving aspect ratio
-    const targetH = Math.round(outH * scale)
+    // CSS sizes the video container by width (width: var(--vid-scale)), with
+    // height: auto on the <video> to maintain aspect ratio.  Match that here
+    // by scaling to the target width and letting FFmpeg auto-calculate height.
     const targetW = Math.round(outW * scale)
+    // -2 keeps height divisible by 2 (required by most codecs)
     filterParts.push(
-      `${videoSrcLabel}scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease[vsmall];` +
+      `${videoSrcLabel}scale=${targetW}:-2[vsmall];` +
       `color=c=0x${bgHex}:size=${outW}x${outH}:r=30000/1001,format=yuv420p[bg];` +
       `[bg][vsmall]overlay=${overlayExpr}[sv]`
     )

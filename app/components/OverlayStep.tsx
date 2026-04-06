@@ -1,5 +1,5 @@
 'use client'
-import { useRef, useCallback } from 'react'
+import { useRef } from 'react'
 
 type WatermarkPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'custom'
 
@@ -62,10 +62,6 @@ interface OverlayStepProps {
   disabled: boolean
 }
 
-// Preview canvas: 9:16 frame, 108×192 px
-const FRAME_W = 108
-const FRAME_H = 192
-
 const WATERMARK_POSITIONS: { value: WatermarkPosition; label: string; icon: string }[] = [
   { value: 'top-left', label: 'Top Left', icon: '◤' },
   { value: 'top-right', label: 'Top Right', icon: '◥' },
@@ -111,45 +107,11 @@ export default function OverlayStep({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const wmFileInputRef = useRef<HTMLInputElement>(null)
   const wm2FileInputRef = useRef<HTMLInputElement>(null)
-  const canvasRef = useRef<HTMLDivElement>(null)
-  const isDragging = useRef(false)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null
     onOverlayFile(f)
   }
-
-  const getPositionFromEvent = useCallback((e: MouseEvent | React.MouseEvent): { x: number; y: number } => {
-    const canvas = canvasRef.current
-    if (!canvas) return { x: overlayX, y: overlayY }
-    const rect = canvas.getBoundingClientRect()
-    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
-    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
-    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }
-  }, [overlayX, overlayY])
-
-  const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    isDragging.current = true
-    const { x, y } = getPositionFromEvent(e)
-    onPositionChange(x, y)
-
-    const onMove = (ev: MouseEvent) => {
-      if (!isDragging.current) return
-      const pos = getPositionFromEvent(ev)
-      onPositionChange(pos.x, pos.y)
-    }
-    const onUp = () => {
-      isDragging.current = false
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }, [getPositionFromEvent, onPositionChange])
-
-  // Image size in the preview canvas (as fraction of frame width)
-  const imgPreviewW = Math.round(FRAME_W * overlayScale / 100)
 
   return (
     <div className={`space-y-4 ${disabled ? 'pointer-events-none' : ''}`}>

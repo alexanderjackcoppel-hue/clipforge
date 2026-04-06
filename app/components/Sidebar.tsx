@@ -97,7 +97,7 @@ export default function Sidebar({
       </div>
 
       {/* Separator + Export */}
-      <div className="w-10 border-t border-zinc-700/40 my-1" />
+      <div className="w-10 border-t border-border/40 my-1" />
       <button
         type="button"
         aria-current={activeStep === 'export' ? 'step' : undefined}
