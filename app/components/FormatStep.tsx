@@ -1,5 +1,7 @@
 'use client'
 
+import Tooltip from './Tooltip'
+
 export type VideoFormat = 'standard' | 'social-post' | 'cinematic' | 'blur-bg'
 
 interface FormatStepProps {
@@ -126,16 +128,16 @@ function ColorPicker({
       <label className="text-xs font-medium text-zinc-400">{label}</label>
       <div className="flex items-center gap-1.5 flex-wrap">
         {presets.map(p => (
-          <button
-            key={p.value}
-            type="button"
-            onClick={() => onChange(p.value)}
-            title={p.label}
-            className={`w-6 h-6 rounded-full border-2 flex-shrink-0 transition-all ${
-              value === p.value ? 'border-violet-500 scale-110' : 'border-zinc-600 hover:border-zinc-400'
-            }`}
-            style={{ backgroundColor: `#${p.value}` }}
-          />
+          <Tooltip key={p.value} text={p.label}>
+            <button
+              type="button"
+              onClick={() => onChange(p.value)}
+              className={`w-6 h-6 rounded-full border-2 flex-shrink-0 transition-all ${
+                value === p.value ? 'border-violet-500 scale-110' : 'border-border hover:border-zinc-400'
+              }`}
+              style={{ backgroundColor: `#${p.value}` }}
+            />
+          </Tooltip>
         ))}
         <label className="flex items-center gap-1 text-xs text-zinc-500 cursor-pointer">
           Custom
@@ -184,7 +186,7 @@ export default function FormatStep({
             className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all text-left ${
               videoFormat === f.id
                 ? 'border-violet-500 bg-violet-600/10'
-                : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                : 'border-border bg-surface-2/50 hover:border-bright'
             }`}
           >
             {f.icon}
@@ -198,7 +200,7 @@ export default function FormatStep({
 
       {/* Format-specific settings */}
       {videoFormat === 'social-post' && (
-        <div className="space-y-3 bg-zinc-900 rounded-xl p-3 border border-zinc-800">
+        <div className="space-y-3 bg-surface-1 rounded-xl p-3 border border-border">
           <ColorPicker
             presets={PRESET_BG_COLORS}
             value={socialBgColor}
@@ -210,7 +212,7 @@ export default function FormatStep({
       )}
 
       {videoFormat === 'cinematic' && (
-        <div className="space-y-3 bg-zinc-900 rounded-xl p-3 border border-zinc-800">
+        <div className="space-y-3 bg-surface-1 rounded-xl p-3 border border-border">
           <ColorPicker
             presets={PRESET_CINEMATIC_COLORS}
             value={cinematicBgColor}
@@ -234,7 +236,7 @@ export default function FormatStep({
       )}
 
       {videoFormat === 'blur-bg' && (
-        <div className="space-y-3 bg-zinc-900 rounded-xl p-3 border border-zinc-800">
+        <div className="space-y-3 bg-surface-1 rounded-xl p-3 border border-border">
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-zinc-400">
               <label>Bar Height</label>
@@ -253,7 +255,7 @@ export default function FormatStep({
       )}
 
       {videoFormat === 'standard' && (
-        <div className="space-y-3 bg-zinc-900 rounded-xl p-3 border border-zinc-800">
+        <div className="space-y-3 bg-surface-1 rounded-xl p-3 border border-border">
           <ColorPicker
             presets={PRESET_STANDARD_COLORS}
             value={standardBgColor}

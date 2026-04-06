@@ -47,11 +47,14 @@ router.post('/', async (req, res) => {
     const silenceStarts: number[] = []
     const silenceEnds: number[] = []
 
-    for (const m of fullOutput.matchAll(/silence_start:\s*([\d.]+)/g)) {
-      silenceStarts.push(parseFloat(m[1]))
+    let match: RegExpExecArray | null
+    const startRe = /silence_start:\s*([\d.]+)/g
+    while ((match = startRe.exec(fullOutput)) !== null) {
+      silenceStarts.push(parseFloat(match[1]))
     }
-    for (const m of fullOutput.matchAll(/silence_end:\s*([\d.]+)/g)) {
-      silenceEnds.push(parseFloat(m[1]))
+    const endRe = /silence_end:\s*([\d.]+)/g
+    while ((match = endRe.exec(fullOutput)) !== null) {
+      silenceEnds.push(parseFloat(match[1]))
     }
 
     // Build speaking segments (gaps between silence intervals)

@@ -23,6 +23,20 @@ interface VoiceoverStepProps {
   onBgMusicFadeIn: (v: boolean) => void
   bgMusicFadeOut: boolean
   onBgMusicFadeOut: (v: boolean) => void
+  audioDuckEnabled: boolean
+  onAudioDuckToggle: (v: boolean) => void
+  audioDuckVolume: number
+  onAudioDuckVolume: (v: number) => void
+  lowerThirdEnabled: boolean
+  onLowerThirdToggle: (v: boolean) => void
+  lowerThirdName: string
+  onLowerThirdNameChange: (v: string) => void
+  lowerThirdSubtitle: string
+  onLowerThirdSubtitleChange: (v: string) => void
+  lowerThirdTemplate: string
+  onLowerThirdTemplateChange: (v: string) => void
+  lowerThirdDuration: number
+  onLowerThirdDurationChange: (v: number) => void
   disabled: boolean
 }
 
@@ -32,7 +46,7 @@ function Toggle({ on, onToggle, label }: { on: boolean; onToggle: () => void; la
       <button
         type="button"
         onClick={onToggle}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-zinc-900 ${on ? 'bg-violet-600' : 'bg-zinc-700'}`}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-zinc-900 ${on ? 'bg-violet-600' : 'bg-surface-3'}`}
         aria-pressed={on}
         aria-label={label}
       >
@@ -52,6 +66,10 @@ export default function VoiceoverStep({
   bgMusicEnabled, onBgMusicToggle, bgMusicFile, onBgMusicFile,
   bgMusicVolume, onBgMusicVolume, bgMusicFadeIn, onBgMusicFadeIn,
   bgMusicFadeOut, onBgMusicFadeOut,
+  audioDuckEnabled, onAudioDuckToggle, audioDuckVolume, onAudioDuckVolume,
+  lowerThirdEnabled, onLowerThirdToggle, lowerThirdName, onLowerThirdNameChange,
+  lowerThirdSubtitle, onLowerThirdSubtitleChange, lowerThirdTemplate, onLowerThirdTemplateChange,
+  lowerThirdDuration, onLowerThirdDurationChange,
   disabled,
 }: VoiceoverStepProps) {
   const voiceInputRef = useRef<HTMLInputElement>(null)
@@ -111,7 +129,7 @@ export default function VoiceoverStep({
         )}
       </div>
 
-      <div className="border-t border-zinc-800" />
+      <div className="border-t border-border" />
 
       {/* ── Voiceover ── */}
       <div className="space-y-4">
@@ -127,13 +145,13 @@ export default function VoiceoverStep({
                 onChange={e => setTtsScript(e.target.value)}
                 placeholder="Type your voiceover script here…"
                 rows={3}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm resize-none"
+                className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 text-sm resize-none"
               />
               <div className="flex items-center gap-2">
                 <select
                   value={ttsVoice}
                   onChange={e => setTtsVoice(e.target.value)}
-                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="bg-surface-2 border border-border rounded-lg px-3 py-2 text-zinc-300 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                 >
                   {TTS_VOICES.map(v => (
                     <option key={v} value={v}>{v}</option>
@@ -143,7 +161,7 @@ export default function VoiceoverStep({
                   type="button"
                   onClick={handleGenerate}
                   disabled={!ttsScript.trim() || ttsStatus === 'loading'}
-                  className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+                  className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-surface-3 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
                 >
                   {ttsStatus === 'loading' ? (
                     <>
@@ -165,9 +183,9 @@ export default function VoiceoverStep({
             </div>
 
             <div className="flex items-center gap-3 text-zinc-600">
-              <div className="flex-1 h-px bg-zinc-800" />
+              <div className="flex-1 h-px bg-surface-2" />
               <span className="text-xs">or upload a file</span>
-              <div className="flex-1 h-px bg-zinc-800" />
+              <div className="flex-1 h-px bg-surface-2" />
             </div>
 
             <div className="space-y-2">
@@ -175,7 +193,7 @@ export default function VoiceoverStep({
                 <button
                   type="button"
                   onClick={() => voiceInputRef.current?.click()}
-                  className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 rounded-lg px-4 py-2.5 text-sm transition-colors"
+                  className="flex items-center gap-2 bg-surface-2 hover:bg-surface-3 border border-border text-zinc-300 rounded-lg px-4 py-2.5 text-sm transition-colors"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
@@ -207,7 +225,7 @@ export default function VoiceoverStep({
         )}
       </div>
 
-      <div className="border-t border-zinc-800" />
+      <div className="border-t border-border" />
 
       {/* ── Background music ── */}
       <div className="space-y-4">
@@ -221,7 +239,7 @@ export default function VoiceoverStep({
                 <button
                   type="button"
                   onClick={() => musicInputRef.current?.click()}
-                  className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 rounded-lg px-4 py-2.5 text-sm transition-colors"
+                  className="flex items-center gap-2 bg-surface-2 hover:bg-surface-3 border border-border text-zinc-300 rounded-lg px-4 py-2.5 text-sm transition-colors"
                 >
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />

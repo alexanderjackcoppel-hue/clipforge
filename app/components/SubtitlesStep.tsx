@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Tooltip from './Tooltip'
 import type { Clip } from '../page'
 
 interface SubtitleLine { id: number; start: number; end: number; text: string }
@@ -89,7 +90,7 @@ function StyleControls({ style, onChange }: { style: StyleProps; onChange: (p: P
         <div className="flex flex-wrap gap-1.5">
           {FONT_FAMILIES.map(f => (
             <button key={f.value} type="button" onClick={() => onChange({ fontFamily: f.value })}
-              className={`px-2.5 py-1 rounded-lg text-xs border transition-all ${style.fontFamily === f.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs border transition-all ${style.fontFamily === f.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2/80 text-zinc-400 hover:border-bright hover:text-zinc-300'}`}
               style={{ fontFamily: f.value }}>{f.label}</button>
           ))}
         </div>
@@ -105,23 +106,27 @@ function StyleControls({ style, onChange }: { style: StyleProps; onChange: (p: P
         <div className="space-y-1">
           <label className="text-xs text-zinc-400">Bold</label>
           <button type="button" onClick={() => onChange({ bold: !style.bold })}
-            className={`w-9 h-7 rounded-lg text-xs border font-bold transition-all ${style.bold ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>B</button>
+            className={`w-9 h-7 rounded-lg text-xs border font-bold transition-all ${style.bold ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright'}`}>B</button>
         </div>
         <div className="space-y-1">
           <label className="text-xs text-zinc-400">Align</label>
           <div className="flex gap-1">
-            <button type="button" title="Center" onClick={() => onChange({ textAlign: 'center' })}
-              className={`w-9 h-7 rounded-lg border text-xs transition-all flex items-center justify-center ${style.textAlign === 'center' ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
-              <svg viewBox="0 0 14 10" className="w-3.5 h-2.5" fill="currentColor">
-                <rect x="0" y="0" width="14" height="1.5" rx="0.75"/><rect x="2" y="3" width="10" height="1.5" rx="0.75"/><rect x="0" y="6" width="14" height="1.5" rx="0.75"/><rect x="2" y="9" width="10" height="1.5" rx="0.75"/>
-              </svg>
-            </button>
-            <button type="button" title="Left" onClick={() => onChange({ textAlign: 'left' })}
-              className={`w-9 h-7 rounded-lg border text-xs transition-all flex items-center justify-center ${style.textAlign === 'left' ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
-              <svg viewBox="0 0 14 10" className="w-3.5 h-2.5" fill="currentColor">
-                <rect x="0" y="0" width="14" height="1.5" rx="0.75"/><rect x="0" y="3" width="10" height="1.5" rx="0.75"/><rect x="0" y="6" width="14" height="1.5" rx="0.75"/><rect x="0" y="9" width="8" height="1.5" rx="0.75"/>
-              </svg>
-            </button>
+            <Tooltip text="Center align">
+              <button type="button" onClick={() => onChange({ textAlign: 'center' })}
+                className={`w-9 h-7 rounded-lg border text-xs transition-all flex items-center justify-center ${style.textAlign === 'center' ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright'}`}>
+                <svg viewBox="0 0 14 10" className="w-3.5 h-2.5" fill="currentColor">
+                  <rect x="0" y="0" width="14" height="1.5" rx="0.75"/><rect x="2" y="3" width="10" height="1.5" rx="0.75"/><rect x="0" y="6" width="14" height="1.5" rx="0.75"/><rect x="2" y="9" width="10" height="1.5" rx="0.75"/>
+                </svg>
+              </button>
+            </Tooltip>
+            <Tooltip text="Left align">
+              <button type="button" onClick={() => onChange({ textAlign: 'left' })}
+                className={`w-9 h-7 rounded-lg border text-xs transition-all flex items-center justify-center ${style.textAlign === 'left' ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright'}`}>
+                <svg viewBox="0 0 14 10" className="w-3.5 h-2.5" fill="currentColor">
+                  <rect x="0" y="0" width="14" height="1.5" rx="0.75"/><rect x="0" y="3" width="10" height="1.5" rx="0.75"/><rect x="0" y="6" width="14" height="1.5" rx="0.75"/><rect x="0" y="9" width="8" height="1.5" rx="0.75"/>
+                </svg>
+              </button>
+            </Tooltip>
           </div>
         </div>
         <div className="flex-1 space-y-1">
@@ -136,9 +141,11 @@ function StyleControls({ style, onChange }: { style: StyleProps; onChange: (p: P
         <label className="text-xs text-zinc-400">Color</label>
         <div className="flex items-center gap-1.5 flex-wrap">
           {PRESET_COLORS.map(p => (
-            <button key={p.value} type="button" onClick={() => onChange({ color: p.value })} title={p.label}
-              className={`w-6 h-6 rounded-full border-2 flex-shrink-0 transition-all ${style.color === p.value ? 'border-violet-500 scale-110' : 'border-zinc-600 hover:border-zinc-400'}`}
-              style={{ backgroundColor: `#${p.value}` }} />
+            <Tooltip key={p.value} text={p.label}>
+              <button type="button" onClick={() => onChange({ color: p.value })}
+                className={`w-6 h-6 rounded-full border-2 flex-shrink-0 transition-all ${style.color === p.value ? 'border-violet-500 scale-110' : 'border-border hover:border-zinc-400'}`}
+                style={{ backgroundColor: `#${p.value}` }} />
+            </Tooltip>
           ))}
           <label className="flex items-center gap-1 text-xs text-zinc-500 cursor-pointer">
             Custom
@@ -228,37 +235,37 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-400">Clip:</span>
           <select value={activeClip?.id ?? ''} onChange={e => onActiveClipChange(e.target.value)}
-            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500">
+            className="flex-1 bg-surface-2 border border-border rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500">
             {clips.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </div>
       )}
 
-      {/* Tab switcher */}
-      <div className="flex gap-1 bg-zinc-900 rounded-xl p-1 border border-zinc-800">
+      {/* Tab switcher — pill segmented control */}
+      <div className="flex gap-0.5 bg-surface-2 rounded-lg p-[3px] border border-border">
         <button type="button" onClick={() => onTabChange('auto')}
-          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-medium transition-all ${activeTab === 'auto' ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
-          <svg className="h-2.5 w-2.5 text-violet-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-md text-[11px] font-medium transition-all ${activeTab === 'auto' ? 'bg-violet-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          <svg className="h-2.5 w-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2l1.68 5.17L19 9l-5.32 1.83L12 16l-1.68-5.17L5 9l5.32-1.83L12 2z" />
           </svg>
           Auto
         </button>
         <button type="button" onClick={() => onTabChange('custom')}
-          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-medium transition-all ${activeTab === 'custom' ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-md text-[11px] font-medium transition-all ${activeTab === 'custom' ? 'bg-violet-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
           Text 1
           {customEnabled && customLines.length > 0 && (
-            <span className="text-[9px] bg-zinc-600/30 text-zinc-400 rounded-full px-1">{customLines.length}</span>
+            <span className={`text-[9px] rounded-full px-1 ${activeTab === 'custom' ? 'bg-white/20 text-white' : 'bg-zinc-600/30 text-zinc-400'}`}>{customLines.length}</span>
           )}
         </button>
         <button type="button" onClick={() => onTabChange('custom2')}
-          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-medium transition-all ${activeTab === 'custom2' ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-md text-[11px] font-medium transition-all ${activeTab === 'custom2' ? 'bg-violet-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
           Text 2
           {custom2Enabled && custom2Lines.length > 0 && (
-            <span className="text-[9px] bg-zinc-600/30 text-zinc-400 rounded-full px-1">{custom2Lines.length}</span>
+            <span className={`text-[9px] rounded-full px-1 ${activeTab === 'custom2' ? 'bg-white/20 text-white' : 'bg-zinc-600/30 text-zinc-400'}`}>{custom2Lines.length}</span>
           )}
         </button>
         <button type="button" onClick={() => onTabChange('emoji')}
-          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[10px] font-medium transition-all ${activeTab === 'emoji' ? 'bg-zinc-800 text-zinc-100 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+          className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-1 rounded-md text-[11px] font-medium transition-all ${activeTab === 'emoji' ? 'bg-violet-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
           Stickers
         </button>
       </div>
@@ -268,7 +275,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <button type="button" onClick={() => onToggleAuto(!autoEnabled)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoEnabled ? 'bg-violet-600' : 'bg-zinc-700'}`}>
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoEnabled ? 'bg-violet-600' : 'bg-surface-3'}`}>
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${autoEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </button>
             <span className="text-sm text-zinc-300">{autoEnabled ? 'Enabled' : 'Disabled'}</span>
@@ -280,7 +287,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
               <span className="text-xs text-zinc-500">Transcribes speech — no internet needed</span>
             </div>
             <button type="button" onClick={onGenerate} disabled={autoStatus === 'loading'}
-              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-surface-3 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors">
               {autoStatus === 'loading' ? (
                 <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Transcribing...</>
               ) : (
@@ -303,14 +310,14 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
                     </span>
                     <textarea value={line.text} rows={1}
                       onChange={e => onAutoLinesChange(autoLines.map(l => l.id === line.id ? { ...l, text: e.target.value } : l))}
-                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y" />
+                      className="flex-1 bg-surface-2 border border-border rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y" />
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="border-t border-zinc-800 pt-3 space-y-3">
+          <div className="border-t border-border pt-3 space-y-3">
             <div>
               <p className="text-xs font-medium text-zinc-400 mb-2">Presets</p>
               <div className="flex flex-wrap gap-1.5">
@@ -323,7 +330,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
                       onAutoBoldChange(p.bold)
                       onAutoOutlineWidthChange(p.outlineWidth)
                     }}
-                    className="px-2.5 py-1 rounded-lg text-xs border border-zinc-700 bg-zinc-800/80 text-zinc-300 hover:border-violet-500/60 hover:bg-violet-600/10 hover:text-violet-300 transition-all"
+                    className="px-2.5 py-1 rounded-lg text-xs border border-border bg-surface-2/80 text-zinc-300 hover:border-violet-500/60 hover:bg-violet-600/10 hover:text-violet-300 transition-all"
                     style={{ fontFamily: p.fontFamily, color: `#${p.color}`, WebkitTextStroke: p.outlineWidth > 0 ? `0.5px #000` : undefined }}
                   >{p.name}</button>
                 ))}
@@ -351,7 +358,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <button type="button" onClick={() => onToggleCustom(!customEnabled)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${customEnabled ? 'bg-violet-600' : 'bg-zinc-700'}`}>
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${customEnabled ? 'bg-violet-600' : 'bg-surface-3'}`}>
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${customEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </button>
             <span className="text-sm text-zinc-300">{customEnabled ? 'Enabled' : 'Disabled'}</span>
@@ -361,9 +368,9 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
             <p className="text-xs text-zinc-500">One line per subtitle — evenly spaced across the clip.</p>
             <textarea value={manualText} onChange={e => setManualText(e.target.value)} rows={4}
               placeholder={"First line of text\nSecond line\nEach line = one subtitle"}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y" />
+              className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y" />
             <button type="button" onClick={handleSetCustomLines} disabled={!manualText.trim()}
-              className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-100 rounded-lg text-xs font-medium transition-colors">
+              className="px-4 py-1.5 bg-surface-3 hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-100 rounded-lg text-xs font-medium transition-colors">
               Set as subtitles
             </button>
           </div>
@@ -373,7 +380,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
               <p className="text-xs text-zinc-400 font-medium">Edit lines ({customLines.length})</p>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                 {customLines.map(line => (
-                  <div key={line.id} className="flex gap-2 items-start bg-zinc-900/50 rounded-lg p-1.5">
+                  <div key={line.id} className="flex gap-2 items-start bg-surface-1/50 rounded-lg p-1.5">
                     {/* Editable timestamps */}
                     <div className="flex flex-col gap-0.5 flex-shrink-0">
                       <label className="text-[9px] text-zinc-600 font-mono text-center">in</label>
@@ -381,26 +388,26 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
                         type="number" step={0.1} min={0}
                         value={line.start.toFixed(1)}
                         onChange={e => onCustomLinesChange(customLines.map(l => l.id === line.id ? { ...l, start: parseFloat(e.target.value) || 0 } : l))}
-                        className="w-12 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center"
+                        className="w-12 bg-surface-2 border border-border rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center"
                       />
                       <label className="text-[9px] text-zinc-600 font-mono text-center">out</label>
                       <input
                         type="number" step={0.1} min={0}
                         value={line.end.toFixed(1)}
                         onChange={e => onCustomLinesChange(customLines.map(l => l.id === line.id ? { ...l, end: parseFloat(e.target.value) || 0 } : l))}
-                        className="w-12 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center"
+                        className="w-12 bg-surface-2 border border-border rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center"
                       />
                     </div>
                     <textarea value={line.text} rows={2}
                       onChange={e => onCustomLinesChange(customLines.map(l => l.id === line.id ? { ...l, text: e.target.value } : l))}
-                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y" />
+                      className="flex-1 bg-surface-2 border border-border rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y" />
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="border-t border-zinc-800 pt-3">
+          <div className="border-t border-border pt-3">
             <p className="text-xs font-medium text-zinc-400 mb-3">Style</p>
             <StyleControls style={customStyle} onChange={patch => {
               if (patch.fontSize !== undefined)     onCustomFontSizeChange(patch.fontSize)
@@ -421,7 +428,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <button type="button" onClick={() => onToggleCustom2(!custom2Enabled)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${custom2Enabled ? 'bg-violet-600' : 'bg-zinc-700'}`}>
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${custom2Enabled ? 'bg-violet-600' : 'bg-surface-3'}`}>
               <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${custom2Enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </button>
             <span className="text-sm text-zinc-300">{custom2Enabled ? 'Enabled' : 'Disabled'}</span>
@@ -431,9 +438,9 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
             <p className="text-xs text-zinc-500">One line per subtitle — evenly spaced across the clip.</p>
             <textarea value={manualText2} onChange={e => setManualText2(e.target.value)} rows={4}
               placeholder={"First line of text\nSecond line\nEach line = one subtitle"}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y" />
+              className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y" />
             <button type="button" onClick={handleSetCustom2Lines} disabled={!manualText2.trim()}
-              className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-100 rounded-lg text-xs font-medium transition-colors">
+              className="px-4 py-1.5 bg-surface-3 hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-100 rounded-lg text-xs font-medium transition-colors">
               Set as subtitles
             </button>
           </div>
@@ -443,27 +450,27 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
               <p className="text-xs text-zinc-400 font-medium">Edit lines ({custom2Lines.length})</p>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                 {custom2Lines.map(line => (
-                  <div key={line.id} className="flex gap-2 items-start bg-zinc-900/50 rounded-lg p-1.5">
+                  <div key={line.id} className="flex gap-2 items-start bg-surface-1/50 rounded-lg p-1.5">
                     <div className="flex flex-col gap-0.5 flex-shrink-0">
                       <label className="text-[9px] text-zinc-600 font-mono text-center">in</label>
                       <input type="number" step={0.1} min={0} value={line.start.toFixed(1)}
                         onChange={e => onCustom2LinesChange(custom2Lines.map(l => l.id === line.id ? { ...l, start: parseFloat(e.target.value) || 0 } : l))}
-                        className="w-12 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center" />
+                        className="w-12 bg-surface-2 border border-border rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center" />
                       <label className="text-[9px] text-zinc-600 font-mono text-center">out</label>
                       <input type="number" step={0.1} min={0} value={line.end.toFixed(1)}
                         onChange={e => onCustom2LinesChange(custom2Lines.map(l => l.id === line.id ? { ...l, end: parseFloat(e.target.value) || 0 } : l))}
-                        className="w-12 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center" />
+                        className="w-12 bg-surface-2 border border-border rounded px-1 py-0.5 text-[10px] text-zinc-300 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 text-center" />
                     </div>
                     <textarea value={line.text} rows={2}
                       onChange={e => onCustom2LinesChange(custom2Lines.map(l => l.id === line.id ? { ...l, text: e.target.value } : l))}
-                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y" />
+                      className="flex-1 bg-surface-2 border border-border rounded-lg px-2 py-1 text-zinc-100 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y" />
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="border-t border-zinc-800 pt-3">
+          <div className="border-t border-border pt-3">
             <p className="text-xs font-medium text-zinc-400 mb-3">Style</p>
             <StyleControls style={custom2Style} onChange={patch => {
               if (patch.fontSize !== undefined)     onCustom2FontSizeChange(patch.fontSize)
@@ -489,7 +496,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
                 '👎','👋','💪','❤️','🔥','✨','💯','🎉','🚀','⭐','💫','🎯','🏆','💀','👀',
                 '😅','🤣','😴','🤗','😬','🥴','🤦','💁','🌈','🎊'].map(e => (
                 <button key={e} type="button" onClick={() => onAddEmoji(e)}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-500 transition-all text-lg">
+                  className="w-9 h-9 flex items-center justify-center rounded-lg bg-surface-2 hover:bg-surface-3 border border-border hover:border-bright transition-all text-lg">
                   {e}
                 </button>
               ))}
@@ -501,7 +508,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
               <p className="text-xs text-zinc-400 font-medium">Added stickers ({emojiStickers.length})</p>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                 {emojiStickers.map(s => (
-                  <div key={s.id} className="flex items-center gap-2 bg-zinc-900/50 rounded-lg p-2">
+                  <div key={s.id} className="flex items-center gap-2 bg-surface-1/50 rounded-lg p-2">
                     <span className="text-xl w-8 text-center flex-shrink-0">{s.emoji}</span>
                     <div className="flex-1 space-y-1 min-w-0">
                       <div className="flex items-center justify-between text-[10px] text-zinc-500">
@@ -513,7 +520,7 @@ export default function SubtitlesStep(props: SubtitlesStepProps) {
                         className="w-full" />
                     </div>
                     <button type="button" onClick={() => onRemoveEmoji(s.id)}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-red-900/40 text-zinc-500 hover:text-red-400 transition-colors flex-shrink-0">
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface-2 hover:bg-red-900/40 text-zinc-500 hover:text-red-400 transition-colors flex-shrink-0">
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>

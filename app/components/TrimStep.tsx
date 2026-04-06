@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useCallback, useEffect } from 'react'
+import Tooltip from './Tooltip'
 import type { Clip } from '../page'
 
 interface CropRect { x: number; y: number; w: number; h: number }
@@ -13,6 +14,7 @@ interface SilenceResult {
 interface TrimStepProps {
   clips: Clip[]
   onAddClip: (startSecs: number, endSecs: number) => void
+  onAddClipsFromSegments: (segments: Array<{ start: number; end: number }>) => void
   onRemoveClip: (clipId: string) => void
   onTrimClip: (clipId: string) => void
   onUpdateClipLabel: (clipId: string, label: string) => void
@@ -33,6 +35,7 @@ interface TrimStepProps {
   onReorderClips: (fromIdx: number, toIdx: number) => void
   onDetectSilence: (clipId: string) => Promise<SilenceResult | null>
   importJobId: string | null
+  sourceVideoDuration: number | null
   disabled: boolean
 }
 
@@ -69,19 +72,40 @@ const SPEED_OPTIONS = [
 ]
 
 const COLOR_PRESETS = [
-  { label: 'Normal',    value: '' },
-  { label: 'Warm',      value: 'warm' },
-  { label: 'Cool',      value: 'cool' },
-  { label: 'Vivid',     value: 'vivid' },
-  { label: 'Cinematic', value: 'cinematic' },
-  { label: 'B&W',       value: 'bw' },
-  { label: 'Faded',     value: 'faded' },
-  { label: 'Night',     value: 'night' },
+  { label: 'Normal',    value: '',           group: 'basic' },
+  { label: 'Warm',      value: 'warm',       group: 'basic' },
+  { label: 'Cool',      value: 'cool',       group: 'basic' },
+  { label: 'Vivid',     value: 'vivid',      group: 'basic' },
+  { label: 'Cinematic', value: 'cinematic',  group: 'basic' },
+  { label: 'B&W',       value: 'bw',         group: 'basic' },
+  { label: 'Faded',     value: 'faded',      group: 'basic' },
+  { label: 'Night',     value: 'night',      group: 'basic' },
+  { label: 'Vintage',   value: 'vintage',    group: 'stylized' },
+  { label: 'Retro',     value: 'retro',      group: 'stylized' },
+  { label: 'Cyberpunk', value: 'cyberpunk',  group: 'stylized' },
+  { label: 'Dreamy',    value: 'dreamy',     group: 'stylized' },
+  { label: 'Film',      value: 'film',       group: 'stylized' },
+  { label: 'Vignette',  value: 'vignette',   group: 'stylized' },
+  { label: 'Hi-Con',    value: 'hicon',      group: 'stylized' },
+  { label: 'Bleach',    value: 'bleach',     group: 'stylized' },
+  { label: 'Teal&Org',  value: 'tealorg',    group: 'stylized' },
+  { label: 'Sunset',    value: 'sunset',     group: 'stylized' },
+  { label: 'Arctic',    value: 'arctic',     group: 'stylized' },
+  { label: 'Neon',      value: 'neon',       group: 'stylized' },
+  { label: 'Sepia',    value: 'sepia',      group: 'stylized' },
+  { label: 'Lomo',     value: 'lomo',       group: 'stylized' },
+  { label: 'Chrome',   value: 'chrome',     group: 'stylized' },
+  { label: 'Noir',     value: 'noir',       group: 'stylized' },
+  { label: 'Pop Art',  value: 'popart',     group: 'stylized' },
+  { label: 'Golden',   value: 'golden',     group: 'stylized' },
+  { label: 'Moody',    value: 'moody',      group: 'stylized' },
+  { label: 'Pastel',   value: 'pastel',     group: 'stylized' },
 ]
 
 export default function TrimStep({
   clips,
   onAddClip,
+  onAddClipsFromSegments,
   onRemoveClip,
   onTrimClip,
   onUpdateClipLabel,
@@ -102,6 +126,7 @@ export default function TrimStep({
   onReorderClips,
   onDetectSilence,
   importJobId,
+  sourceVideoDuration,
   disabled,
 }: TrimStepProps) {
   const [startSecs, setStartSecs] = useState(0)
@@ -112,7 +137,7 @@ export default function TrimStep({
   const [announcement, setAnnouncement] = useState('')
   const [focusedClipIndex, setFocusedClipIndex] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
-  const [silenceResults, setSilenceResults] = useState<Record<string, { loading: boolean; data: { start: number; end: number }[] | null }>>({})
+  const [silenceResults, setSilenceResults] = useState<Record<string, { loading: boolean; data: { start: number; end: number }[] | null; speaking: { start: number; end: number }[] | null }>>({})
   const [waveformUrls, setWaveformUrls] = useState<Record<string, string>>({})
   const dragFromIdx = useRef<number | null>(null)
 
@@ -367,15 +392,15 @@ export default function TrimStep({
             <div className="space-y-1.5">
               <div
                 ref={timelineRef}
-                className="relative h-8 bg-zinc-800 rounded-lg cursor-pointer select-none"
+                className="relative h-8 bg-surface-2 rounded-lg cursor-pointer select-none"
                 onClick={handleTimelineClick}
               >
                 <div
-                  className="absolute top-0 bottom-0 left-0 bg-zinc-900/70 rounded-l-lg pointer-events-none"
+                  className="absolute top-0 bottom-0 left-0 bg-surface-1/70 rounded-l-lg pointer-events-none"
                   style={{ width: `${secsToPercent(startSecs)}%` }}
                 />
                 <div
-                  className="absolute top-0 bottom-0 right-0 bg-zinc-900/70 rounded-r-lg pointer-events-none"
+                  className="absolute top-0 bottom-0 right-0 bg-surface-1/70 rounded-r-lg pointer-events-none"
                   style={{ width: `${100 - secsToPercent(endSecs)}%` }}
                 />
                 <div
@@ -441,7 +466,7 @@ export default function TrimStep({
                     if (videoRef.current) videoRef.current.currentTime = clamped
                   }
                 }}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm font-mono"
+                className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm font-mono"
               />
             </div>
             <div>
@@ -460,7 +485,7 @@ export default function TrimStep({
                     if (videoRef.current) videoRef.current.currentTime = clamped
                   }
                 }}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm font-mono"
+                className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm font-mono"
               />
             </div>
           </div>
@@ -475,7 +500,7 @@ export default function TrimStep({
                 setStartSecs(endSecs)
                 setEndSecs(newEnd > endSecs ? newEnd : Math.min(endSecs + 30, duration))
               }}
-              className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+              className="flex items-center gap-2 bg-surface-2 hover:bg-surface-3 border border-border text-zinc-200 font-medium rounded-lg px-4 py-2 text-sm transition-colors"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -534,13 +559,13 @@ export default function TrimStep({
                   dragFromIdx.current = null
                 }}
                 onDragEnd={() => { setDragOverIdx(null); dragFromIdx.current = null }}
-                className={`bg-zinc-800/50 border rounded-lg px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-900 transition-all cursor-grab active:cursor-grabbing ${
-                  dragOverIdx === idx ? 'border-violet-500/60 bg-violet-600/5' : focusedClipIndex === idx ? 'border-zinc-600/50' : 'border-zinc-700/50'
+                className={`bg-surface-2/50 border rounded-lg px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-900 transition-all cursor-grab active:cursor-grabbing ${
+                  dragOverIdx === idx ? 'border-violet-500/60 bg-violet-600/5' : focusedClipIndex === idx ? 'border-border/50' : 'border-border/50'
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   {/* Drag handle */}
-                  <span className="text-zinc-600 hover:text-zinc-400 cursor-grab active:cursor-grabbing flex-shrink-0 select-none" title="Drag to reorder">⠿</span>
+                  <Tooltip text="Drag to reorder"><span className="text-zinc-600 hover:text-zinc-400 cursor-grab active:cursor-grabbing flex-shrink-0 select-none">⠿</span></Tooltip>
                   {/* Label */}
                   {editingLabelId === clip.id ? (
                     <input
@@ -558,7 +583,7 @@ export default function TrimStep({
                         }
                         if (e.key === 'Escape') setEditingLabelId(null)
                       }}
-                      className="bg-zinc-800 border border-violet-500 rounded px-2 py-0.5 text-sm text-zinc-100 focus:outline-none w-24"
+                      className="bg-surface-2 border border-violet-500 rounded px-2 py-0.5 text-sm text-zinc-100 focus:outline-none w-24"
                     />
                   ) : (
                     <button
@@ -585,23 +610,24 @@ export default function TrimStep({
                           ? 'bg-violet-600 text-white'
                           : !isFullFrame({ x: clip.cropX, y: clip.cropY, w: clip.cropW, h: clip.cropH })
                             ? 'bg-violet-900/50 border border-violet-600/60 text-violet-300'
-                            : 'bg-zinc-700/60 hover:bg-zinc-700 border border-zinc-600/40 text-zinc-400 hover:text-zinc-200'
+                            : 'bg-surface-3/60 hover:bg-surface-3 border border-border/40 text-zinc-400 hover:text-zinc-200'
                       }`}
-                      title="Crop video frame"
                     >
+                      <Tooltip text="Select a region of the video to keep">
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M7 4v16M17 4v16M4 7h16M4 17h16" />
                       </svg>
                       {cropEditClipId === clip.id ? 'Recrop' : !isFullFrame({ x: clip.cropX, y: clip.cropY, w: clip.cropW, h: clip.cropH }) ? 'Recrop' : 'Crop'}
+                      </Tooltip>
                     </button>
                   )}
 
                   {/* Status / action */}
                   {clip.trimStatus === 'loading' ? (
                     <div className="flex items-center gap-2">
-                      <div className="w-20 bg-zinc-800 rounded-full h-1" role="progressbar" aria-valuenow={clip.trimProgress} aria-valuemin={0} aria-valuemax={100} aria-label="Trim progress">
+                      <div className="w-20 bg-surface-2 rounded-full h-1 overflow-hidden" role="progressbar" aria-valuenow={clip.trimProgress} aria-valuemin={0} aria-valuemax={100} aria-label="Trim progress">
                         <div
-                          className="bg-violet-500 h-1 rounded-full transition-all duration-300"
+                          className="bg-violet-500 h-1 rounded-full transition-all duration-300 progress-shimmer"
                           style={{ width: `${clip.trimProgress}%` }}
                         />
                       </div>
@@ -626,12 +652,13 @@ export default function TrimStep({
                     type="button"
                     onClick={() => onRemoveClip(clip.id)}
                     className="text-zinc-600 hover:text-red-400 transition-colors ml-1 p-1.5 -m-1.5 rounded"
-                    title="Remove clip"
                     aria-label="Remove clip"
                   >
+                    <Tooltip text="Remove this clip">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                     </svg>
+                    </Tooltip>
                   </button>
                 </div>
 
@@ -645,7 +672,7 @@ export default function TrimStep({
                 )}
 
                 {/* Effects row: fade + zoom */}
-                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-zinc-700/40 flex-wrap">
+                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/40 flex-wrap">
                   <label className="flex items-center gap-1.5 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -680,34 +707,34 @@ export default function TrimStep({
                       className={`text-[11px] rounded px-2 py-0.5 transition-colors ${
                         zoomSelectClipId === clip.id
                           ? 'bg-violet-600 text-white'
-                          : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-300'
+                          : 'bg-surface-3 hover:bg-surface-3 text-zinc-300'
                       }`}
                     >
                       {zoomSelectClipId === clip.id ? 'Click preview →' : `Target: ${clip.zoomX}%,${clip.zoomY}%`}
                     </button>
                   )}
                   {/* Flip buttons */}
-                  <button type="button" title="Flip horizontal"
+                  <Tooltip text="Mirror horizontally"><button type="button"
                     onClick={() => onToggleClipFlip(clip.id, 'flipH', !clip.flipH)}
-                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.flipH ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.flipH ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright'}`}>
                     ↔
-                  </button>
-                  <button type="button" title="Flip vertical"
+                  </button></Tooltip>
+                  <Tooltip text="Flip upside down"><button type="button"
                     onClick={() => onToggleClipFlip(clip.id, 'flipV', !clip.flipV)}
-                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.flipV ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.flipV ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright'}`}>
                     ↕
-                  </button>
+                  </button></Tooltip>
                   {/* Reverse */}
-                  <button type="button" title="Play clip backwards"
+                  <Tooltip text="Play in reverse"><button type="button"
                     onClick={() => onToggleClipReverse(clip.id, !clip.reversed)}
-                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.reversed ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.reversed ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright'}`}>
                     ↩
-                  </button>
+                  </button></Tooltip>
                 </div>
 
                 {/* Waveform visualization */}
                 {clip.trimStatus === 'done' && waveformUrls[clip.id] && (
-                  <div className="mt-2 rounded overflow-hidden opacity-60 h-8 bg-zinc-900">
+                  <div className="mt-2 rounded overflow-hidden opacity-60 h-8 bg-surface-1">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={waveformUrls[clip.id]}
@@ -722,18 +749,19 @@ export default function TrimStep({
                   <div className="mt-1.5 flex items-center gap-2">
                     <button type="button"
                       onClick={async () => {
-                        setSilenceResults(prev => ({ ...prev, [clip.id]: { loading: true, data: null } }))
+                        setSilenceResults(prev => ({ ...prev, [clip.id]: { loading: true, data: null, speaking: null } }))
                         const result = await onDetectSilence(clip.id)
                         setSilenceResults(prev => ({
                           ...prev,
                           [clip.id]: {
                             loading: false,
                             data: result?.silenceIntervals ?? null,
+                            speaking: result?.speakingSegments ?? null,
                           }
                         }))
                       }}
                       disabled={silenceResults[clip.id]?.loading}
-                      className="text-[11px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 transition-all disabled:opacity-50"
+                      className="text-[11px] px-2 py-0.5 rounded border border-border bg-surface-2 text-zinc-400 hover:border-bright hover:text-zinc-200 transition-all disabled:opacity-50"
                     >
                       {silenceResults[clip.id]?.loading ? 'Detecting…' : 'Detect silences'}
                     </button>
@@ -744,30 +772,58 @@ export default function TrimStep({
                           : `${silenceResults[clip.id].data!.length} silent segment${silenceResults[clip.id].data!.length !== 1 ? 's' : ''} detected`}
                       </span>
                     )}
+                    {silenceResults[clip.id]?.speaking && silenceResults[clip.id].speaking!.length > 0 && (
+                      <button type="button"
+                        onClick={() => {
+                          const segments = silenceResults[clip.id].speaking!
+                          // Map speaking segments from trimmed-clip-relative times back to source video times
+                          const mapped = segments.map(s => ({
+                            start: clip.startSecs + s.start,
+                            end: clip.startSecs + s.end,
+                          }))
+                          onAddClipsFromSegments(mapped)
+                        }}
+                        className="text-[11px] px-2 py-0.5 rounded border border-violet-600/60 bg-violet-600/10 text-violet-300 hover:bg-violet-600/20 transition-all"
+                      >
+                        Remove silences ({silenceResults[clip.id].speaking!.length} clips)
+                      </button>
+                    )}
                   </div>
                 )}
 
                 {/* Speed + Color row */}
-                <div className="mt-2 pt-2 border-t border-zinc-700/40 space-y-2">
+                <div className="mt-2 pt-2 border-t border-border/40 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[11px] text-zinc-500 w-10 flex-shrink-0">Speed</span>
                     {SPEED_OPTIONS.map(s => (
                       <button key={s.value} type="button"
                         onClick={() => onUpdateClipSpeed(clip.id, s.value)}
-                        className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.speed === s.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
+                        className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.speed === s.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright'}`}>
                         {s.label}
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] text-zinc-500 w-10 flex-shrink-0">Color</span>
-                    {COLOR_PRESETS.map(p => (
-                      <button key={p.value} type="button"
-                        onClick={() => onUpdateClipColorPreset(clip.id, p.value)}
-                        className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.colorPreset === p.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:border-zinc-500'}`}>
-                        {p.label}
-                      </button>
-                    ))}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] text-zinc-500 w-10 flex-shrink-0">Color</span>
+                      {COLOR_PRESETS.filter(p => p.group === 'basic').map(p => (
+                        <button key={p.value} type="button"
+                          onClick={() => onUpdateClipColorPreset(clip.id, p.value)}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.colorPreset === p.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright'}`}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] text-zinc-500 w-10 flex-shrink-0">FX</span>
+                      {COLOR_PRESETS.filter(p => p.group === 'stylized').map(p => (
+                        <button key={p.value} type="button"
+                          onClick={() => onUpdateClipColorPreset(clip.id, p.value)}
+                          className={`text-[11px] px-2 py-0.5 rounded border transition-all ${clip.colorPreset === p.value ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-400 hover:border-bright'}`}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -867,7 +923,7 @@ export default function TrimStep({
                       <button
                         type="button"
                         onClick={() => onUpdateClipCrop(clip.id, { x: 0, y: 0, w: 100, h: 100 })}
-                        className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700"
+                        className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1 rounded bg-surface-2 hover:bg-surface-3"
                       >
                         Reset
                       </button>

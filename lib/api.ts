@@ -186,6 +186,28 @@ export interface ExportParams {
   lowerThirdSubtitle?: string
   lowerThirdTemplate?: 'clean-line' | 'dark-chip' | 'broadcast'
   lowerThirdDuration?: number
+  // Watermark
+  watermarkEnabled?: boolean
+  watermarkFile?: File
+  watermarkPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'custom'
+  watermarkScale?: number
+  watermarkOpacity?: number
+  watermarkStroke?: number
+  watermarkStrokeColor?: string
+  watermarkMode?: 'image' | 'text'
+  watermarkText?: string
+  watermarkTextColor?: string
+  watermarkTextWeight?: number
+  watermarkCustomX?: number
+  watermarkCustomY?: number
+  // Watermark 2
+  watermark2Enabled?: boolean
+  watermark2File?: File
+  watermark2Position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'custom'
+  watermark2Scale?: number
+  watermark2Opacity?: number
+  watermark2Stroke?: number
+  watermark2StrokeColor?: string
 }
 
 async function renderEmojiCanvas(
@@ -264,6 +286,30 @@ export async function exportVideo(params: ExportParams): Promise<{ jobId: string
   if (params.lowerThirdSubtitle) form.append('lowerThirdSubtitle', params.lowerThirdSubtitle)
   if (params.lowerThirdTemplate) form.append('lowerThirdTemplate', params.lowerThirdTemplate)
   if (params.lowerThirdDuration !== undefined) form.append('lowerThirdDuration', String(params.lowerThirdDuration))
+
+  // Watermark
+  form.append('watermarkEnabled', String(!!params.watermarkEnabled))
+  if (params.watermarkEnabled && params.watermarkFile) form.append('watermark', params.watermarkFile)
+  if (params.watermarkPosition) form.append('watermarkPosition', params.watermarkPosition)
+  if (params.watermarkScale !== undefined) form.append('watermarkScale', String(params.watermarkScale))
+  if (params.watermarkOpacity !== undefined) form.append('watermarkOpacity', String(params.watermarkOpacity))
+  if (params.watermarkStroke !== undefined) form.append('watermarkStroke', String(params.watermarkStroke))
+  if (params.watermarkStrokeColor) form.append('watermarkStrokeColor', params.watermarkStrokeColor)
+  if (params.watermarkMode) form.append('watermarkMode', params.watermarkMode)
+  if (params.watermarkText) form.append('watermarkText', params.watermarkText)
+  if (params.watermarkTextColor) form.append('watermarkTextColor', params.watermarkTextColor)
+  if (params.watermarkTextWeight !== undefined) form.append('watermarkTextWeight', String(params.watermarkTextWeight))
+  if (params.watermarkCustomX !== undefined) form.append('watermarkCustomX', String(params.watermarkCustomX))
+  if (params.watermarkCustomY !== undefined) form.append('watermarkCustomY', String(params.watermarkCustomY))
+
+  // Watermark 2
+  form.append('watermark2Enabled', String(!!params.watermark2Enabled))
+  if (params.watermark2Enabled && params.watermark2File) form.append('watermark2', params.watermark2File)
+  if (params.watermark2Position) form.append('watermark2Position', params.watermark2Position)
+  if (params.watermark2Scale !== undefined) form.append('watermark2Scale', String(params.watermark2Scale))
+  if (params.watermark2Opacity !== undefined) form.append('watermark2Opacity', String(params.watermark2Opacity))
+  if (params.watermark2Stroke !== undefined) form.append('watermark2Stroke', String(params.watermark2Stroke))
+  if (params.watermark2StrokeColor) form.append('watermark2StrokeColor', params.watermark2StrokeColor)
 
   if (params.emojiStickers && params.emojiStickers.length > 0) {
     const blob = await renderEmojiCanvas(params.emojiStickers, params.presetWidth ?? 1080, params.presetHeight ?? 1920)

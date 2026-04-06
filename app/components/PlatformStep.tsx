@@ -91,7 +91,7 @@ export default function PlatformStep({
                       className={`flex flex-col items-start p-2 rounded-lg border text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 ${
                         isActive
                           ? 'border-violet-500 bg-violet-600/10'
-                          : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-600'
+                          : 'border-border bg-surface-2/50 hover:border-bright'
                       }`}
                     >
                       <span className={`text-xs font-medium leading-tight ${isActive ? 'text-violet-300' : 'text-zinc-300'}`}>
@@ -114,7 +114,7 @@ export default function PlatformStep({
 
       {/* Custom dimensions */}
       {activePreset.id === 'custom' && (
-        <div className="bg-zinc-900 rounded-xl p-3 border border-zinc-800 space-y-2">
+        <div className="bg-surface-1 rounded-xl p-3 border border-border space-y-2">
           <p className="text-xs font-medium text-zinc-400">Output dimensions</p>
           <div className="flex items-center gap-2">
             <input
@@ -125,7 +125,7 @@ export default function PlatformStep({
               value={customWidthInput}
               onChange={e => setCustomWidthInput(e.target.value)}
               onBlur={e => handleCustomDimCommit('width', e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 font-mono text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              className="w-full bg-surface-2 border border-border rounded-lg px-3 py-1.5 font-mono text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
               placeholder="Width"
             />
             <span className="text-zinc-600 text-xs flex-shrink-0">×</span>
@@ -137,7 +137,7 @@ export default function PlatformStep({
               value={customHeightInput}
               onChange={e => setCustomHeightInput(e.target.value)}
               onBlur={e => handleCustomDimCommit('height', e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 font-mono text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              className="w-full bg-surface-2 border border-border rounded-lg px-3 py-1.5 font-mono text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
               placeholder="Height"
             />
           </div>

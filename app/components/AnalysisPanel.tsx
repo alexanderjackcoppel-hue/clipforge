@@ -1,5 +1,6 @@
 'use client'
 import { useState, useCallback } from 'react'
+import Tooltip from './Tooltip'
 import { analyseVideo } from '../../lib/api'
 import type { VideoAnalysis } from '../../lib/api'
 
@@ -31,7 +32,7 @@ function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) 
     <button
       type="button"
       onClick={handleCopy}
-      className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded border border-zinc-700 hover:border-zinc-500"
+      className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors px-1.5 py-0.5 rounded border border-border hover:border-bright"
     >
       {copied ? (
         <svg className="w-3 h-3 text-emerald-400" viewBox="0 0 12 12" fill="currentColor"><path d="M10 3L5 9 2 6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -117,7 +118,7 @@ export default function AnalysisPanel({ jobId, duration, onUseText }: AnalysisPa
   const hashtagString = analysis.hashtags.map(h => `#${h}`).join(' ')
 
   return (
-    <div className="mt-3 bg-zinc-800/50 border border-zinc-700/50 rounded-lg p-4 space-y-3">
+    <div className="mt-3 bg-surface-2/50 border border-border/50 rounded-lg p-4 space-y-3">
       {/* Summary + mood */}
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm text-zinc-200 leading-relaxed flex-1">{analysis.summary}</p>
@@ -128,7 +129,7 @@ export default function AnalysisPanel({ jobId, duration, onUseText }: AnalysisPa
 
       {/* Funny text suggestion */}
       {analysis.funnyText && (
-        <div className="bg-zinc-900/60 border border-zinc-700/50 rounded-lg p-3 space-y-2">
+        <div className="bg-surface-1/60 border border-border/50 rounded-lg p-3 space-y-2">
           <div className="flex items-center gap-1.5">
             <span className="text-base leading-none">😂</span>
             <p className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">Funny overlay suggestion</p>
@@ -170,17 +171,17 @@ export default function AnalysisPanel({ jobId, duration, onUseText }: AnalysisPa
           </div>
           <div className="flex flex-wrap gap-1.5">
             {analysis.hashtags.map(tag => (
-              <button
-                key={tag}
-                type="button"
-                onClick={async () => {
-                  await navigator.clipboard.writeText(`#${tag}`)
-                }}
-                title="Click to copy"
-                className="text-[11px] text-violet-400 bg-violet-600/10 border border-violet-700/40 hover:border-violet-500/60 hover:bg-violet-600/20 rounded-full px-2 py-0.5 transition-colors font-mono"
-              >
-                #{tag}
-              </button>
+              <Tooltip key={tag} text="Click to copy">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(`#${tag}`)
+                  }}
+                  className="text-[11px] text-violet-400 bg-violet-600/10 border border-violet-700/40 hover:border-violet-500/60 hover:bg-violet-600/20 rounded-full px-2 py-0.5 transition-colors font-mono"
+                >
+                  #{tag}
+                </button>
+              </Tooltip>
             ))}
           </div>
         </div>

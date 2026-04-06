@@ -55,6 +55,8 @@ router.post('/', (req, res) => {
   upload.fields([
     { name: 'voiceover', maxCount: 1 },
     { name: 'overlay', maxCount: 1 },
+    { name: 'watermark', maxCount: 1 },
+    { name: 'watermark2', maxCount: 1 },
     { name: 'bgMusic', maxCount: 1 },
     { name: 'emojiOverlay', maxCount: 1 },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,6 +113,24 @@ router.post('/', (req, res) => {
       lowerThirdDuration = '5',
       presetWidth = '1080',
       presetHeight = '1920',
+      watermarkEnabled,
+      watermarkPosition = 'bottom-right',
+      watermarkScale = '10',
+      watermarkOpacity = '0.8',
+      watermarkStroke = '0',
+      watermarkStrokeColor = 'FFFFFF',
+      watermarkMode = 'text',
+      watermarkText = '',
+      watermarkTextColor = 'CCCCCC',
+      watermarkTextWeight = '300',
+      watermarkCustomX = '50',
+      watermarkCustomY = '50',
+      watermark2Enabled,
+      watermark2Position = 'bottom-right',
+      watermark2Scale = '10',
+      watermark2Opacity = '0.8',
+      watermark2Stroke = '0',
+      watermark2StrokeColor = 'FFFFFF',
     } = req.body as Record<string, string>
 
     const rawPresetWidth = parseInt(presetWidth)
@@ -156,6 +176,8 @@ router.post('/', (req, res) => {
     const files = (req.files as { [fieldname: string]: Express.Multer.File[] }) || {}
     const voiceoverFile = voiceoverEnabled === 'true' ? files['voiceover']?.[0]?.path : undefined
     const overlayFile = overlayEnabled === 'true' ? files['overlay']?.[0]?.path : undefined
+    const watermarkFile = watermarkEnabled === 'true' ? files['watermark']?.[0]?.path : undefined
+    const watermark2File = watermark2Enabled === 'true' ? files['watermark2']?.[0]?.path : undefined
     const bgMusicFile = bgMusicEnabled === 'true' ? files['bgMusic']?.[0]?.path : undefined
 
     // Helper to build a style object with safe defaults
@@ -289,6 +311,25 @@ router.post('/', (req, res) => {
           lowerThirdDuration: lowerThirdDuration ? Math.max(1, Math.min(30, parseFloat(lowerThirdDuration))) : 5,
           outputWidth,
           outputHeight,
+          watermarkImage: watermarkFile,
+          watermarkPosition: (['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center', 'custom'].includes(watermarkPosition)
+            ? watermarkPosition : 'bottom-right') as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'custom',
+          watermarkScale: Math.max(1, Math.min(50, parseInt(watermarkScale) || 10)),
+          watermarkOpacity: Math.max(0, Math.min(1, parseFloat(watermarkOpacity) || 0.8)),
+          watermarkStroke: Math.max(0, Math.min(10, parseInt(watermarkStroke) || 0)),
+          watermarkStrokeColor: /^[0-9A-Fa-f]{6}$/.test(watermarkStrokeColor) ? watermarkStrokeColor : 'FFFFFF',
+          watermarkText: watermarkMode === 'text' ? watermarkText : undefined,
+          watermarkTextColor: /^[0-9A-Fa-f]{6}$/.test(watermarkTextColor) ? watermarkTextColor : 'CCCCCC',
+          watermarkTextWeight: parseInt(watermarkTextWeight) || 300,
+          watermarkCustomX: Math.max(0, Math.min(100, parseFloat(watermarkCustomX) || 50)),
+          watermarkCustomY: Math.max(0, Math.min(100, parseFloat(watermarkCustomY) || 50)),
+          watermark2Image: watermark2File,
+          watermark2Position: (['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'].includes(watermark2Position)
+            ? watermark2Position : 'bottom-right') as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center',
+          watermark2Scale: Math.max(1, Math.min(50, parseInt(watermark2Scale) || 10)),
+          watermark2Opacity: Math.max(0, Math.min(1, parseFloat(watermark2Opacity) || 0.8)),
+          watermark2Stroke: Math.max(0, Math.min(10, parseInt(watermark2Stroke) || 0)),
+          watermark2StrokeColor: /^[0-9A-Fa-f]{6}$/.test(watermark2StrokeColor) ? watermark2StrokeColor : 'FFFFFF',
         })
 
         let totalDuration: number | null = null

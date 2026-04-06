@@ -37,14 +37,14 @@ export default function ImportStep({ status, progress, error, videoUrl, importJo
             value={urlInput}
             onChange={e => setUrlInput(e.target.value)}
             placeholder="https://www.youtube.com/watch?v=..."
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
+            className="w-full bg-surface-2 border border-border rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
             disabled={status === 'loading'}
           />
         </div>
         <button
           type="submit"
           disabled={status === 'loading' || !urlInput.trim()}
-          className="flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition-colors duration-150 w-full sm:w-auto"
+          className="flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:bg-surface-3 disabled:text-zinc-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition-colors duration-150 w-full sm:w-auto"
         >
           {status === 'loading' ? (
             <>
@@ -72,9 +72,9 @@ export default function ImportStep({ status, progress, error, videoUrl, importJo
             <span>Downloading...</span>
             <span className="font-mono">{progress}%</span>
           </div>
-          <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Download progress">
+          <div className="w-full bg-surface-2 rounded-full h-1.5 overflow-hidden" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Download progress">
             <div
-              className="bg-violet-500 h-1.5 rounded-full transition-all duration-300"
+              className="bg-violet-500 h-1.5 rounded-full transition-all duration-300 progress-shimmer"
               style={{ width: `${progress}%` }}
             />
           </div>

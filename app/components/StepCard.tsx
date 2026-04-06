@@ -19,7 +19,7 @@ export default function StepCard({
 }: StepCardProps) {
   return (
     <div
-      className={`bg-zinc-900 border border-zinc-800 rounded-xl p-6 transition-all duration-200 ${
+      className={`bg-surface-1 border border-border rounded-xl p-6 transition-all duration-200 ${
         disabled ? 'opacity-40 pointer-events-none select-none' : ''
       }`}
     >
@@ -33,7 +33,7 @@ export default function StepCard({
             type="button"
             onClick={() => onToggle(!enabled)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-zinc-900 ${
-              enabled ? 'bg-violet-600' : 'bg-zinc-700'
+              enabled ? 'bg-violet-600' : 'bg-surface-3'
             }`}
             aria-pressed={enabled}
             aria-label={`Toggle ${title}`}

@@ -164,6 +164,32 @@ interface AppState {
   overlayRotation: number
   overlayScale: number
 
+  // Watermark 1 (persistent logo/trademark)
+  watermarkEnabled: boolean
+  watermarkMode: 'image' | 'text'
+  watermarkFile: File | null
+  watermarkPreviewUrl: string | null
+  watermarkText: string
+  watermarkTextColor: string // hex
+  watermarkTextWeight: number // 100-900
+  watermarkPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'custom'
+  watermarkCustomX: number // 0-100 percent
+  watermarkCustomY: number // 0-100 percent
+  watermarkScale: number
+  watermarkOpacity: number
+  watermarkStroke: number // 0 = no stroke, 1-10 = px outline
+  watermarkStrokeColor: string // hex color for outline
+
+  // Watermark 2
+  watermark2Enabled: boolean
+  watermark2File: File | null
+  watermark2PreviewUrl: string | null
+  watermark2Position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'custom'
+  watermark2Scale: number
+  watermark2Opacity: number
+  watermark2Stroke: number
+  watermark2StrokeColor: string
+
   // Text alignment
   subtitleTextAlign: 'center' | 'left'
   customTextAlign: 'center' | 'left'
@@ -307,6 +333,30 @@ const initialState: AppState = {
   overlayRotation: 0,
   overlayScale: 20,
 
+  watermarkEnabled: false,
+  watermarkMode: 'text',
+  watermarkFile: null,
+  watermarkPreviewUrl: null,
+  watermarkText: '@CrispMemes',
+  watermarkTextColor: '000000',
+  watermarkTextWeight: 400,
+  watermarkPosition: 'bottom-right',
+  watermarkCustomX: 50,
+  watermarkCustomY: 50,
+  watermarkScale: 10,
+  watermarkOpacity: 0.8,
+  watermarkStroke: 0,
+  watermarkStrokeColor: 'FFFFFF',
+
+  watermark2Enabled: false,
+  watermark2File: null,
+  watermark2PreviewUrl: null,
+  watermark2Position: 'top-left',
+  watermark2Scale: 10,
+  watermark2Opacity: 0.8,
+  watermark2Stroke: 0,
+  watermark2StrokeColor: 'FFFFFF',
+
   subtitleTextAlign: 'center',
   customTextAlign: 'center',
   custom2TextAlign: 'center',
@@ -329,6 +379,8 @@ const initialState: AppState = {
 export default function HomePage() {
   const [state, setState] = useState<AppState>(initialState)
   const overlayPreviewUrlRef = useRef<string | null>(null)
+  const watermarkPreviewUrlRef = useRef<string | null>(null)
+  const watermark2PreviewUrlRef = useRef<string | null>(null)
 
   const updateState = useCallback((patch: Partial<AppState>) => {
     setState(prev => ({ ...prev, ...patch }))
@@ -415,21 +467,33 @@ export default function HomePage() {
   const exportJobMap = Object.fromEntries(state.clips.map(c => [c.id, c.exportJobId]))
   useMultiJobProgress(exportJobMap, handleExportEvent)
 
-  // ── Undo history (must be declared before handlers that call pushHistory) ──
+  // ── Undo/redo history (must be declared before handlers that call pushHistory) ──
   const historyRef = useRef<AppState[]>([])
+  const redoRef = useRef<AppState[]>([])
   const stateRef = useRef(state)
   useEffect(() => { stateRef.current = state }, [state])
 
   const pushHistory = useCallback(() => {
     historyRef.current = [...historyRef.current.slice(-9), stateRef.current]
+    redoRef.current = [] // clear redo stack on new action
   }, [])
 
   const handleUndo = useCallback(() => {
     const history = historyRef.current
     if (history.length === 0) return
+    redoRef.current = [...redoRef.current.slice(-9), stateRef.current]
     const prev = history[history.length - 1]
     historyRef.current = history.slice(0, -1)
     setState(prev)
+  }, [])
+
+  const handleRedo = useCallback(() => {
+    const redo = redoRef.current
+    if (redo.length === 0) return
+    historyRef.current = [...historyRef.current.slice(-9), stateRef.current]
+    const next = redo[redo.length - 1]
+    redoRef.current = redo.slice(0, -1)
+    setState(next)
   }, [])
 
   useEffect(() => {
@@ -438,10 +502,14 @@ export default function HomePage() {
         e.preventDefault()
         handleUndo()
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault()
+        handleRedo()
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [handleUndo])
+  }, [handleUndo, handleRedo])
 
   // --- Handlers ---
   const handleDownload = useCallback(async (url: string) => {
@@ -514,6 +582,16 @@ export default function HomePage() {
     const clip = makeClip(startSecs, endSecs, state.clips.length + 1)
     setState(prev => ({ ...prev, clips: [...prev.clips, clip] }))
     handleTrimClip(clip.id, clip)
+  }, [pushHistory, state.clips.length, handleTrimClip])
+
+  const handleAddClipsFromSegments = useCallback((segments: Array<{ start: number; end: number }>) => {
+    pushHistory()
+    const baseIndex = state.clips.length + 1
+    const newClips = segments.map((seg, i) => makeClip(seg.start, seg.end, baseIndex + i))
+    setState(prev => ({ ...prev, clips: [...prev.clips, ...newClips] }))
+    for (const clip of newClips) {
+      handleTrimClip(clip.id, clip)
+    }
   }, [pushHistory, state.clips.length, handleTrimClip])
 
   const handleRemoveClip = useCallback((clipId: string) => {
@@ -620,7 +698,7 @@ export default function HomePage() {
 
   const handleDetectSilence = useCallback(async (clipId: string) => {
     const clip = state.clips.find(c => c.id === clipId)
-    if (!clip?.trimJobId || !state.importJobId) return
+    if (!clip?.trimJobId || !state.importJobId) return null
     try {
       return await detectSilence(state.importJobId, clip.clipSuffix)
     } catch {
@@ -711,10 +789,44 @@ export default function HomePage() {
     }
   }, [updateState])
 
+  const handleWatermarkFile = useCallback((f: File | null) => {
+    if (watermarkPreviewUrlRef.current) {
+      URL.revokeObjectURL(watermarkPreviewUrlRef.current)
+      watermarkPreviewUrlRef.current = null
+    }
+    if (f) {
+      const url = URL.createObjectURL(f)
+      watermarkPreviewUrlRef.current = url
+      updateState({ watermarkFile: f, watermarkPreviewUrl: url })
+    } else {
+      updateState({ watermarkFile: null, watermarkPreviewUrl: null })
+    }
+  }, [updateState])
+
+  const handleWatermark2File = useCallback((f: File | null) => {
+    if (watermark2PreviewUrlRef.current) {
+      URL.revokeObjectURL(watermark2PreviewUrlRef.current)
+      watermark2PreviewUrlRef.current = null
+    }
+    if (f) {
+      const url = URL.createObjectURL(f)
+      watermark2PreviewUrlRef.current = url
+      updateState({ watermark2File: f, watermark2PreviewUrl: url })
+    } else {
+      updateState({ watermark2File: null, watermark2PreviewUrl: null })
+    }
+  }, [updateState])
+
   useEffect(() => {
     return () => {
       if (overlayPreviewUrlRef.current) {
         URL.revokeObjectURL(overlayPreviewUrlRef.current)
+      }
+      if (watermarkPreviewUrlRef.current) {
+        URL.revokeObjectURL(watermarkPreviewUrlRef.current)
+      }
+      if (watermark2PreviewUrlRef.current) {
+        URL.revokeObjectURL(watermark2PreviewUrlRef.current)
       }
     }
   }, [])
@@ -838,6 +950,26 @@ export default function HomePage() {
         overlayY: state.overlayY,
         overlayRotation: state.overlayRotation,
         overlayScale: state.overlayScale,
+        watermarkEnabled: state.watermarkEnabled,
+        watermarkMode: state.watermarkMode,
+        watermarkFile: state.watermarkEnabled && state.watermarkMode === 'image' ? (state.watermarkFile ?? undefined) : undefined,
+        watermarkText: state.watermarkMode === 'text' ? state.watermarkText : undefined,
+        watermarkTextColor: state.watermarkTextColor,
+        watermarkTextWeight: state.watermarkTextWeight,
+        watermarkPosition: state.watermarkPosition,
+        watermarkCustomX: state.watermarkCustomX,
+        watermarkCustomY: state.watermarkCustomY,
+        watermarkScale: state.watermarkScale,
+        watermarkOpacity: state.watermarkOpacity,
+        watermarkStroke: state.watermarkStroke,
+        watermarkStrokeColor: state.watermarkStrokeColor,
+        watermark2Enabled: state.watermark2Enabled,
+        watermark2File: state.watermark2Enabled ? (state.watermark2File ?? undefined) : undefined,
+        watermark2Position: state.watermark2Position,
+        watermark2Scale: state.watermark2Scale,
+        watermark2Opacity: state.watermark2Opacity,
+        watermark2Stroke: state.watermark2Stroke,
+        watermark2StrokeColor: state.watermark2StrokeColor,
         videoFormat: state.videoFormat,
         standardBgColor: state.standardBgColor,
         socialBgColor: state.socialBgColor,
@@ -999,6 +1131,7 @@ export default function HomePage() {
           <TrimStep
             clips={state.clips}
             onAddClip={handleAddClip}
+            onAddClipsFromSegments={handleAddClipsFromSegments}
             onRemoveClip={handleRemoveClip}
             onTrimClip={handleTrimClip}
             onUpdateClipLabel={handleUpdateClipLabel}
@@ -1019,6 +1152,7 @@ export default function HomePage() {
             onReorderClips={handleReorderClips}
             onDetectSilence={handleDetectSilence}
             importJobId={state.importJobId}
+            sourceVideoDuration={state.sourceVideoDuration}
             disabled={state.importStatus !== 'done'}
           />
         )
@@ -1188,7 +1322,7 @@ export default function HomePage() {
             lowerThirdSubtitle={state.lowerThirdSubtitle}
             onLowerThirdSubtitleChange={v => updateState({ lowerThirdSubtitle: v })}
             lowerThirdTemplate={state.lowerThirdTemplate}
-            onLowerThirdTemplateChange={v => updateState({ lowerThirdTemplate: v })}
+            onLowerThirdTemplateChange={v => updateState({ lowerThirdTemplate: v as 'clean-line' | 'dark-chip' | 'broadcast' })}
             lowerThirdDuration={state.lowerThirdDuration}
             onLowerThirdDurationChange={v => updateState({ lowerThirdDuration: v })}
             disabled={!anyTrimDone}
@@ -1209,6 +1343,47 @@ export default function HomePage() {
             onScaleChange={v => updateState({ overlayScale: v })}
             overlayRotation={state.overlayRotation}
             onRotationChange={v => updateState({ overlayRotation: v })}
+            watermarkEnabled={state.watermarkEnabled}
+            onWatermarkToggle={v => updateState({ watermarkEnabled: v })}
+            watermarkMode={state.watermarkMode}
+            onWatermarkModeChange={m => updateState({ watermarkMode: m })}
+            watermarkFile={state.watermarkFile}
+            onWatermarkFile={handleWatermarkFile}
+            watermarkText={state.watermarkText}
+            onWatermarkTextChange={t => updateState({ watermarkText: t })}
+            watermarkTextColor={state.watermarkTextColor}
+            onWatermarkTextColorChange={c => updateState({ watermarkTextColor: c })}
+            watermarkTextWeight={state.watermarkTextWeight}
+            onWatermarkTextWeightChange={w => updateState({ watermarkTextWeight: w })}
+            watermarkPreviewUrl={state.watermarkPreviewUrl}
+            watermarkPosition={state.watermarkPosition}
+            onWatermarkPositionChange={pos => updateState({ watermarkPosition: pos })}
+            watermarkCustomX={state.watermarkCustomX}
+            watermarkCustomY={state.watermarkCustomY}
+            onWatermarkCustomPositionChange={(x, y) => updateState({ watermarkCustomX: x, watermarkCustomY: y })}
+            watermarkScale={state.watermarkScale}
+            onWatermarkScaleChange={v => updateState({ watermarkScale: v })}
+            watermarkOpacity={state.watermarkOpacity}
+            onWatermarkOpacityChange={v => updateState({ watermarkOpacity: v })}
+            watermarkStroke={state.watermarkStroke}
+            onWatermarkStrokeChange={v => updateState({ watermarkStroke: v })}
+            watermarkStrokeColor={state.watermarkStrokeColor}
+            onWatermarkStrokeColorChange={v => updateState({ watermarkStrokeColor: v })}
+            watermark2Enabled={state.watermark2Enabled}
+            onWatermark2Toggle={v => updateState({ watermark2Enabled: v })}
+            watermark2File={state.watermark2File}
+            onWatermark2File={handleWatermark2File}
+            watermark2PreviewUrl={state.watermark2PreviewUrl}
+            watermark2Position={state.watermark2Position}
+            onWatermark2PositionChange={pos => updateState({ watermark2Position: pos })}
+            watermark2Scale={state.watermark2Scale}
+            onWatermark2ScaleChange={v => updateState({ watermark2Scale: v })}
+            watermark2Opacity={state.watermark2Opacity}
+            onWatermark2OpacityChange={v => updateState({ watermark2Opacity: v })}
+            watermark2Stroke={state.watermark2Stroke}
+            onWatermark2StrokeChange={v => updateState({ watermark2Stroke: v })}
+            watermark2StrokeColor={state.watermark2StrokeColor}
+            onWatermark2StrokeColorChange={v => updateState({ watermark2StrokeColor: v })}
             disabled={!anyTrimDone}
           />
         )
@@ -1221,13 +1396,14 @@ export default function HomePage() {
             disabled={!anyTrimDone}
             outputWidth={outputWidth}
             outputHeight={outputHeight}
+            importJobId={state.importJobId}
           />
         )
     }
   }
 
   return (
-    <main className="flex flex-col h-screen overflow-hidden bg-zinc-950">
+    <main className="flex flex-col h-screen overflow-hidden bg-surface-base ambient-bg">
       {/* ── Top bar (hidden in crop edit mode) ── */}
       {!state.cropEditClipId && (
         <TopBar
@@ -1237,6 +1413,10 @@ export default function HomePage() {
           canExport={canExport}
           displayWidth={outputWidth}
           displayHeight={outputHeight}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={historyRef.current.length > 0}
+          canRedo={redoRef.current.length > 0}
           onSaveProject={() => {
             // Serialize state excluding File objects and transient states
             const toSave = {
@@ -1285,6 +1465,16 @@ export default function HomePage() {
               overlayY: state.overlayY,
               overlayRotation: state.overlayRotation,
               overlayScale: state.overlayScale,
+              watermarkEnabled: state.watermarkEnabled,
+              watermarkFile: state.watermarkEnabled ? (state.watermarkFile ?? undefined) : undefined,
+              watermarkPosition: state.watermarkPosition,
+              watermarkScale: state.watermarkScale,
+              watermarkOpacity: state.watermarkOpacity,
+              watermark2Enabled: state.watermark2Enabled,
+              watermark2File: state.watermark2Enabled ? (state.watermark2File ?? undefined) : undefined,
+              watermark2Position: state.watermark2Position,
+              watermark2Scale: state.watermark2Scale,
+              watermark2Opacity: state.watermark2Opacity,
               lowerThirdEnabled: state.lowerThirdEnabled,
               lowerThirdName: state.lowerThirdName,
               lowerThirdSubtitle: state.lowerThirdSubtitle,
@@ -1472,6 +1662,32 @@ export default function HomePage() {
             overlayRotation={state.overlayRotation}
             overlayScale={state.overlayScale}
             onOverlayMove={(x, y) => updateState({ overlayX: x, overlayY: y })}
+            watermarkEnabled={state.watermarkEnabled}
+            watermarkMode={state.watermarkMode}
+            watermarkPreviewUrl={state.watermarkPreviewUrl}
+            watermarkText={state.watermarkText}
+            watermarkTextColor={state.watermarkTextColor}
+            watermarkTextWeight={state.watermarkTextWeight}
+            watermarkPosition={state.watermarkPosition}
+            watermarkCustomX={state.watermarkCustomX}
+            watermarkCustomY={state.watermarkCustomY}
+            onWatermarkPositionDrag={(x, y) => updateState({ watermarkCustomX: x, watermarkCustomY: y, watermarkPosition: 'custom' as const })}
+            watermarkScale={state.watermarkScale}
+            watermarkOpacity={state.watermarkOpacity}
+            watermarkStroke={state.watermarkStroke}
+            watermarkStrokeColor={state.watermarkStrokeColor}
+            watermark2Enabled={state.watermark2Enabled}
+            watermark2PreviewUrl={state.watermark2PreviewUrl}
+            watermark2Position={state.watermark2Position}
+            watermark2Scale={state.watermark2Scale}
+            watermark2Opacity={state.watermark2Opacity}
+            watermark2Stroke={state.watermark2Stroke}
+            watermark2StrokeColor={state.watermark2StrokeColor}
+            clipColorPreset={activeClip?.colorPreset}
+            clipFlipH={activeClip?.flipH}
+            clipFlipV={activeClip?.flipV}
+            clipCrop={activeClip ? { x: activeClip.cropX, y: activeClip.cropY, w: activeClip.cropW, h: activeClip.cropH } : undefined}
+            clipIsTrimming={activeClip?.trimStatus === 'loading'}
             videoFormat={state.videoFormat}
             standardBgColor={state.standardBgColor}
             socialBgColor={state.socialBgColor}
@@ -1493,9 +1709,11 @@ export default function HomePage() {
 
         {/* ── Right: Properties panel (hidden in crop edit mode) ── */}
         {!state.cropEditClipId && (
-          <div className="w-80 flex-shrink-0 bg-zinc-950 border-l border-zinc-800 flex flex-col h-full overflow-hidden">
+          <div className="w-80 flex-shrink-0 glass-panel border-l flex flex-col h-full overflow-hidden relative z-10">
             <div className="flex-1 overflow-y-auto px-4 py-4">
-              {renderStepContent()}
+              <div key={state.activeStep} className="step-content-enter">
+                {renderStepContent()}
+              </div>
             </div>
             <p className="text-center text-xs text-zinc-700 pb-2 flex-shrink-0">
               Local tool — API binds to 127.0.0.1 only
