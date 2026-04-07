@@ -259,6 +259,8 @@ router.post('/', (req, res) => {
     // the export runs.
     try { const now = new Date(); utimesSync(jobDir, now, now) } catch { /* ignore */ }
 
+    console.log(`[export] format=${videoFormat} scale=${socialVideoScale} bg=${socialBgColor} offset=${videoOffsetX},${videoOffsetY}`)
+
     jobManager.enqueueRender(async () => {
       try {
         jobManager.sendProgress(opJobId, { type: 'progress', stage: 'exporting', percent: 0 })

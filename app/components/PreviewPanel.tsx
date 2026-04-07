@@ -976,7 +976,6 @@ export default function PreviewPanel({
 
                 {/* ── Social Post: solid bg + draggable/resizable video ── */}
                 {videoFormat === 'social-post' && (
-                  <Tooltip text="Drag to reposition">
                   <div
                     onMouseDown={handleVideoDragStart}
                     style={{
@@ -987,24 +986,22 @@ export default function PreviewPanel({
                       transform: 'translate(-50%, -50%)',
                       pointerEvents: 'auto',
                       cursor: 'move',
+                      lineHeight: 0,
                     }}
                   >
-                    <div className="relative">
-                      <video ref={videoRef} src={videoUrl}
-                        style={{ width: '100%', height: 'auto', display: 'block', ...videoFilterStyle }}
-                        preload="metadata" playsInline />
-                      <div className="absolute inset-0 ring-2 ring-white/30 rounded pointer-events-none" />
-                      <div className={`${cornerBase} -top-1.5 -left-1.5 cursor-nwse-resize`}
-                        onMouseDown={e => handleResizeStart(e, 'top')} />
-                      <div className={`${cornerBase} -top-1.5 -right-1.5 cursor-nesw-resize`}
-                        onMouseDown={e => handleResizeStart(e, 'top')} />
-                      <div className={`${cornerBase} -bottom-1.5 -left-1.5 cursor-nesw-resize`}
-                        onMouseDown={e => handleResizeStart(e, 'bottom')} />
-                      <div className={`${cornerBase} -bottom-1.5 -right-1.5 cursor-nwse-resize`}
-                        onMouseDown={e => handleResizeStart(e, 'bottom')} />
-                    </div>
+                    <video ref={videoRef} src={videoUrl}
+                      style={{ width: '100%', height: 'auto', display: 'block', ...videoFilterStyle }}
+                      preload="metadata" playsInline />
+                    <div className="absolute inset-0 ring-2 ring-white/30 rounded pointer-events-none" />
+                    <div className={`${cornerBase} top-0 left-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize`}
+                      onMouseDown={e => handleResizeStart(e, 'top')} />
+                    <div className={`${cornerBase} top-0 right-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize`}
+                      onMouseDown={e => handleResizeStart(e, 'top')} />
+                    <div className={`${cornerBase} bottom-0 left-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize`}
+                      onMouseDown={e => handleResizeStart(e, 'bottom')} />
+                    <div className={`${cornerBase} bottom-0 right-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize`}
+                      onMouseDown={e => handleResizeStart(e, 'bottom')} />
                   </div>
-                  </Tooltip>
                 )}
 
                 {/* ── Cinematic: full-frame video + solid colored bar overlays ── */}
