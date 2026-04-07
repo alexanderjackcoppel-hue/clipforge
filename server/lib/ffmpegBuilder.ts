@@ -266,7 +266,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
       }
     }
     filterParts.push(
-      `${lastVideoLabel}drawtext=text='${wmText}':font='Trebuchet MS':fontsize=${fontSize}:fontcolor=#${color}@${wmOpacity.toFixed(2)}` +
+      `${lastVideoLabel}drawtext=text='${wmText}':font='Instagram Sans Headline':fontsize=${fontSize}:fontcolor=#${color}@${wmOpacity.toFixed(2)}` +
       `:${posExpr}` +
       (wmStroke > 0 ? `:borderw=${wmStroke}:bordercolor=#${strokeColor}` : '') +
       `[ov_wm]`

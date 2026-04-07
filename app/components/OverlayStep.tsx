@@ -324,7 +324,7 @@ export default function OverlayStep({
                 {/* Preview */}
                 <div className="relative w-full h-16 bg-surface-1 rounded-lg border border-border/50 overflow-hidden flex items-center justify-center">
                   <span style={{
-                    fontFamily: "'Trebuchet MS', 'DejaVu Sans', var(--font-ui), sans-serif",
+                    fontFamily: "'Instagram Sans Headline', 'Trebuchet MS', 'DejaVu Sans', sans-serif",
                     fontWeight: watermarkTextWeight,
                     color: `#${watermarkTextColor}`,
                     opacity: watermarkOpacity,

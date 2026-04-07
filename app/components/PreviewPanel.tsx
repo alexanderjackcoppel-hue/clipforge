@@ -1165,7 +1165,7 @@ export default function PreviewPanel({
               <span
                 className="absolute whitespace-nowrap"
                 style={{
-                  fontFamily: "'Trebuchet MS', 'DejaVu Sans', var(--font-ui), sans-serif",
+                  fontFamily: "'Instagram Sans Headline', 'Trebuchet MS', 'DejaVu Sans', sans-serif",
                   fontWeight: watermarkTextWeight,
                   fontSize: `${Math.max(2, watermarkScale * 0.6)}cqi`,
                   color: `#${watermarkTextColor}`,

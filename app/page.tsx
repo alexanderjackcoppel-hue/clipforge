@@ -377,7 +377,14 @@ const initialState: AppState = {
 }
 
 export default function HomePage() {
-  const [state, setState] = useState<AppState>(initialState)
+  const [state, setState] = useState<AppState>(() => ({
+    ...initialState,
+    // Force watermark defaults — ensures correct values even after HMR
+    watermarkTextColor: '000000',
+    watermarkTextWeight: 400,
+    watermarkStroke: 0,
+    watermarkStrokeColor: 'FFFFFF',
+  }))
   const overlayPreviewUrlRef = useRef<string | null>(null)
   const watermarkPreviewUrlRef = useRef<string | null>(null)
   const watermark2PreviewUrlRef = useRef<string | null>(null)
