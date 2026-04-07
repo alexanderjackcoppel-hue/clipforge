@@ -163,7 +163,7 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     const targetW = Math.round(outW * scale / 2) * 2 // ensure even
     filterParts.push(
       `${videoSrcLabel}scale=${targetW}:-2[vsmall];` +
-      `color=c=0x${bgHex}:size=${outW}x${outH}:d=1:r=1,format=yuv420p[bg];` +
+      `color=c=0x${bgHex}:size=${outW}x${outH}:r=30,format=yuv420p[bg];` +
       `[bg][vsmall]overlay=${overlayExpr}:shortest=1[sv]`
     )
   } else if (fmt === 'cinematic') {
@@ -596,6 +596,11 @@ export function buildASSSubtitles(
   const boldFlag = style.bold ? 1 : 0
   const outline = Math.max(0, Math.min(8, style.outlineWidth))
 
+  // ASS uses &HAABBGGRR color format (BGR order, not RGB).
+  // The input style.color is RGB hex (e.g. 'FF0000' = red), so swap R and B.
+  const rgbHex = style.color.padStart(6, '0')
+  const assPrimaryColor = `&H00${rgbHex.slice(4, 6)}${rgbHex.slice(2, 4)}${rgbHex.slice(0, 2)}`
+
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${outputWidth}
@@ -603,7 +608,7 @@ PlayResY: ${outputHeight}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${style.fontFamily},${style.fontSize},&H00${style.color},&H000000FF,&H00000000,&H80000000,${boldFlag},0,0,0,100,100,0,0,1,${outline},1,5,40,40,0,1
+Style: Default,${style.fontFamily},${style.fontSize},${assPrimaryColor},&H000000FF,&H00000000,&H80000000,${boldFlag},0,0,0,100,100,0,0,1,${outline},1,5,40,40,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
@@ -665,7 +670,7 @@ function buildColorEqFilter(preset: string | undefined): string {
     case 'faded':     return 'eq=contrast=0.85:brightness=0.08:saturation=0.7'
     case 'night':     return 'eq=contrast=1.2:brightness=-0.08:saturation=0.9:gamma_b=1.2'
     // Stylized FX
-    case 'vintage':   return 'eq=contrast=0.9:brightness=0.05:saturation=0.6:gamma_r=1.15:gamma_b=0.85,curves=vintage'
+    case 'vintage':   return 'eq=contrast=0.9:brightness=0.05:saturation=0.6:gamma_r=1.15:gamma_b=0.85,colorlevels=rimax=0.95:gimax=0.90:bimax=0.80:rimin=0.05:bimin=0.10'
     case 'retro':     return 'eq=contrast=1.0:brightness=0.04:saturation=0.8:gamma_r=1.2:gamma_g=1.05:gamma_b=0.8'
     case 'cyberpunk': return 'eq=contrast=1.3:brightness=-0.03:saturation=1.4:gamma_r=0.85:gamma_b=1.3'
     case 'dreamy':    return 'eq=contrast=0.8:brightness=0.1:saturation=0.9:gamma=1.15'
