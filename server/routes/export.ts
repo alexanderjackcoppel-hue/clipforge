@@ -356,7 +356,7 @@ router.post('/', (req, res) => {
           type: 'done',
           stage: 'exported',
           percent: 100,
-          url: `/files/${importJobId}/final${sfx}.mp4`,
+          url: `/files/${importJobId}/final${sfx}.mp4?t=${Date.now()}`,
         })
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Export failed'
