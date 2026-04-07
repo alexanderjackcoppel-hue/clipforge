@@ -159,15 +159,12 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   const overlayExpr = `(W-w)/2+${offXpx}:(H-h)/2+${offYpx}`
 
   if (fmt === 'social-post') {
-    // CSS sizes the video container by width (width: var(--vid-scale)), with
-    // height: auto on the <video> to maintain aspect ratio.  Match that here
-    // by scaling to the target width and letting FFmpeg auto-calculate height.
-    const targetW = Math.round(outW * scale)
-    // -2 keeps height divisible by 2 (required by most codecs)
+    // Scale video to target width (matching CSS width: var(--vid-scale)), auto height
+    const targetW = Math.round(outW * scale / 2) * 2 // ensure even
     filterParts.push(
       `${videoSrcLabel}scale=${targetW}:-2[vsmall];` +
-      `color=c=0x${bgHex}:size=${outW}x${outH}:r=30000/1001,format=yuv420p[bg];` +
-      `[bg][vsmall]overlay=${overlayExpr}[sv]`
+      `color=c=0x${bgHex}:size=${outW}x${outH}:d=1:r=1,format=yuv420p[bg];` +
+      `[bg][vsmall]overlay=${overlayExpr}:shortest=1[sv]`
     )
   } else if (fmt === 'cinematic') {
     // Fit video within frame (no crop), pad with bar color, then draw solid bars on top/bottom
