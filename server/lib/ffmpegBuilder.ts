@@ -550,6 +550,7 @@ export function buildTrimArgs(opts: {
     '-crf', '23',
     '-c:a', 'aac',
     '-b:a', '192k',
+    '-avoid_negative_ts', 'make_zero',  // fix VFR/seek timestamp issues
     '-movflags', '+faststart',
     '-y',
     opts.outputVideo,
