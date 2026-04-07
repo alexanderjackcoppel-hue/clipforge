@@ -161,10 +161,12 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   if (fmt === 'social-post') {
     // Scale video to target width (matching CSS width: var(--vid-scale)), auto height
     const targetW = Math.round(outW * scale / 2) * 2 // ensure even
+    // Background uses the video as the main timeline (no shortest flag).
+    // The color source repeats indefinitely; FFmpeg stops when video ends.
     filterParts.push(
       `${videoSrcLabel}scale=${targetW}:-2[vsmall];` +
       `color=c=0x${bgHex}:size=${outW}x${outH}:r=30,format=yuv420p[bg];` +
-      `[bg][vsmall]overlay=${overlayExpr}:shortest=1[sv]`
+      `[bg][vsmall]overlay=${overlayExpr}:eof_action=repeat[sv]`
     )
   } else if (fmt === 'cinematic') {
     // Fit video within frame (no crop), pad with bar color, then draw solid bars on top/bottom
