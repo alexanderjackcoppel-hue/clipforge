@@ -159,14 +159,13 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   const overlayExpr = `(W-w)/2+${offXpx}:(H-h)/2+${offYpx}`
 
   if (fmt === 'social-post') {
-    // Scale video to target width (matching CSS width: var(--vid-scale)), auto height
+    // Scale video to target width, then pad to output dimensions with bg color.
+    // pad creates the background inline — no separate color source needed,
+    // so no duration mismatch that could truncate or hang.
     const targetW = Math.round(outW * scale / 2) * 2 // ensure even
-    // Background uses the video as the main timeline (no shortest flag).
-    // The color source repeats indefinitely; FFmpeg stops when video ends.
     filterParts.push(
-      `${videoSrcLabel}scale=${targetW}:-2[vsmall];` +
-      `color=c=0x${bgHex}:size=${outW}x${outH}:r=30,format=yuv420p[bg];` +
-      `[bg][vsmall]overlay=${overlayExpr}:eof_action=repeat[sv]`
+      `${videoSrcLabel}scale=${targetW}:-2,` +
+      `pad=${outW}:${outH}:(ow-iw)/2+${offXpx}:(oh-ih)/2+${offYpx}:color=0x${bgHex}[sv]`
     )
   } else if (fmt === 'cinematic') {
     // Fit video within frame (no crop), pad with bar color, then draw solid bars on top/bottom
