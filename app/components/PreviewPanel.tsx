@@ -249,6 +249,7 @@ export default function PreviewPanel({
 
   // Subtitle drag
   const isDraggingRef   = useRef(false)
+  const subDragStartRef = useRef<{ mx: number; my: number; initX: number; initY: number } | null>(null)
   const rafRef          = useRef<number | null>(null)
   const lastPosRef      = useRef<{ pos: Pos; layer: 'auto' | 'custom' | 'custom2' | 'emoji' } | null>(null)
 
@@ -453,6 +454,20 @@ export default function PreviewPanel({
     else if (activeLayer === 'custom2') onCustom2PositionChange(pos)
   }
 
+  // ── Subtitle text drag start (delta-based, no teleport) ──
+  const handleSubtitleDragStart = (e: React.MouseEvent, layer: 'auto' | 'custom' | 'custom2') => {
+    e.stopPropagation()
+    e.preventDefault()
+    isDraggingRef.current = true
+    const el = containerRef.current
+    if (!el) return
+    const style = getComputedStyle(el)
+    const varName = layer === 'auto' ? '--auto' : layer === 'custom' ? '--custom' : '--custom2'
+    const curX = parseFloat(style.getPropertyValue(`${varName}-x`)) || (layer === 'auto' ? 50 : 50)
+    const curY = parseFloat(style.getPropertyValue(`${varName}-y`)) || (layer === 'auto' ? 85 : 50)
+    subDragStartRef.current = { mx: e.clientX, my: e.clientY, initX: curX, initY: curY }
+  }
+
   // ── Video drag start (social-post) ──
   const handleVideoDragStart = (e: React.MouseEvent) => {
     if (videoFormat !== 'social-post') return
@@ -649,10 +664,27 @@ export default function PreviewPanel({
       }
       // Subtitle drag
       if (!isDraggingRef.current) return
-      const raw = getPosFromEvent(e)
-      if (!raw) return
-      const { x, y, hx, hy } = applySnap(raw.x, raw.y)
-      const pos = { x, y }
+      let pos: Pos
+      let hx: number | null = null, hy: number | null = null
+      const start = subDragStartRef.current
+      if (start && containerRef.current) {
+        // Delta-based drag (started from text element)
+        const rect = containerRef.current.getBoundingClientRect()
+        const dxPct = ((e.clientX - start.mx) / rect.width) * 100
+        const dyPct = ((e.clientY - start.my) / rect.height) * 100
+        const rawX = Math.max(0, Math.min(100, start.initX + dxPct))
+        const rawY = Math.max(0, Math.min(100, start.initY + dyPct))
+        const snapped = applySnap(rawX, rawY)
+        pos = { x: snapped.x, y: snapped.y }
+        hx = snapped.hx; hy = snapped.hy
+      } else {
+        // Teleport (clicked empty area)
+        const raw = getPosFromEvent(e)
+        if (!raw) return
+        const snapped = applySnap(raw.x, raw.y)
+        pos = { x: snapped.x, y: snapped.y }
+        hx = snapped.hx; hy = snapped.hy
+      }
       updateSnapLines(hx, hy)
       setCSSSubPos(pos, activeLayer)
       lastPosRef.current = { pos, layer: activeLayer }
@@ -717,6 +749,7 @@ export default function PreviewPanel({
       }
       if (!isDraggingRef.current) return
       isDraggingRef.current = false
+      subDragStartRef.current = null
       if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
       const p = lastPosRef.current
       if (p) {
@@ -1184,24 +1217,27 @@ export default function PreviewPanel({
 
             {/* Auto subtitle layer */}
             {autoEnabled && !showOriginal && (
-              <div className="absolute pointer-events-none"
-                style={{ left: 'var(--auto-x, 50%)', top: 'var(--auto-y, 85%)', transform: autoStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 25 }}>
+              <div className="absolute"
+                style={{ left: 'var(--auto-x, 50%)', top: 'var(--auto-y, 85%)', transform: autoStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 30, cursor: 'move', pointerEvents: 'auto' }}
+                onMouseDown={e => handleSubtitleDragStart(e, 'auto')}>
                 <span style={subtitleStyle(autoStyle, activeLayer === 'custom')}>{autoText}</span>
               </div>
             )}
 
             {/* Custom text layer */}
             {customEnabled && !showOriginal && (
-              <div className="absolute pointer-events-none"
-                style={{ left: 'var(--custom-x, 50%)', top: 'var(--custom-y, 50%)', transform: customStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 25 }}>
+              <div className="absolute"
+                style={{ left: 'var(--custom-x, 50%)', top: 'var(--custom-y, 50%)', transform: customStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 30, cursor: 'move', pointerEvents: 'auto' }}
+                onMouseDown={e => handleSubtitleDragStart(e, 'custom')}>
                 <span style={subtitleStyle(customStyle, activeLayer === 'auto')}>{customText}</span>
               </div>
             )}
 
             {/* Custom text 2 layer */}
             {custom2Enabled && !showOriginal && (
-              <div className="absolute pointer-events-none"
-                style={{ left: 'var(--custom2-x, 50%)', top: 'var(--custom2-y, 50%)', transform: custom2Style.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 25 }}>
+              <div className="absolute"
+                style={{ left: 'var(--custom2-x, 50%)', top: 'var(--custom2-y, 50%)', transform: custom2Style.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 30, cursor: 'move', pointerEvents: 'auto' }}
+                onMouseDown={e => handleSubtitleDragStart(e, 'custom2')}>
                 <span style={subtitleStyle(custom2Style, activeLayer !== 'custom2')}>{custom2Text}</span>
               </div>
             )}

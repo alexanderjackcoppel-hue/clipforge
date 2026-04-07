@@ -334,6 +334,7 @@ router.post('/', (req, res) => {
           watermark2StrokeColor: /^[0-9A-Fa-f]{6}$/.test(watermark2StrokeColor) ? watermark2StrokeColor : 'FFFFFF',
         })
 
+        console.log(`[export] ffmpeg args count: ${args.length}`)
         let totalDuration: number | null = null
         await spawnJob('ffmpeg', args, {
           onStderr: (chunk) => {
@@ -360,6 +361,7 @@ router.post('/', (req, res) => {
         })
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Export failed'
+        console.error(`[export] FAILED: ${message}`)
         jobManager.sendProgress(opJobId, { type: 'error', message: `Export failed: ${message}` })
       }
     })
