@@ -564,7 +564,7 @@ export function parseTime(mmss: string): number {
   if (isNaN(m) || isNaN(s) || s < 0 || s >= 60 || m < 0) {
     throw new Error(`Invalid time: "${mmss}". Use mm:ss (e.g. 1:30)`)
   }
-  return m * 60 + s
+  return m * 60 + s // s can now be decimal (e.g. "0:14.8" → 14.8)
 }
 
 export interface SubtitleLine {

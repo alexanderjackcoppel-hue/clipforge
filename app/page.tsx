@@ -260,8 +260,9 @@ function makeClip(startSecs: number, endSecs: number, index: number): Clip {
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+  const s = seconds % 60
+  // Use 1 decimal place for sub-second precision in trim operations
+  return `${m}:${s.toFixed(1).padStart(4, '0')}`
 }
 
 const initialState: AppState = {
