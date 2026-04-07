@@ -14,6 +14,7 @@ import thumbnailRouter from './routes/thumbnail.js'
 import ttsRouter from './routes/tts.js'
 import silenceRouter from './routes/silence.js'
 import waveformRouter from './routes/waveform.js'
+import draftsRouter from './routes/drafts.js'
 
 export const TMP_DIR = join('/tmp', 'clipforge')
 mkdirSync(TMP_DIR, { recursive: true })
@@ -119,6 +120,7 @@ app.use('/api/thumbnail', thumbnailRouter)
 app.use('/api/tts', ttsRouter)
 app.use('/api/silence-detect', silenceRouter)
 app.use('/api/waveform', waveformRouter)
+app.use('/api/drafts', draftsRouter)
 
 // --- Save folder config ---
 const CONFIG_PATH = join(homedir(), '.clipforge-config.json')

@@ -13,11 +13,12 @@ import TopBar from './components/TopBar'
 import Sidebar from './components/Sidebar'
 import type { EditorStep } from './components/Sidebar'
 import PlatformStep from './components/PlatformStep'
+import DraftsPanel from './components/DraftsPanel'
 import { PLATFORM_PRESETS, DEFAULT_PRESET } from '../lib/platformPresets'
 import type { PlatformPreset } from '../lib/platformPresets'
 import { useJobProgress } from '../hooks/useJobProgress'
 import { useMultiJobProgress } from '../hooks/useMultiJobProgress'
-import { downloadVideo, trimVideo, transcribeVideo, exportVideo, detectSilence } from '../lib/api'
+import { downloadVideo, trimVideo, transcribeVideo, exportVideo, detectSilence, saveDraft, loadDraft } from '../lib/api'
 import type { ProgressEvent } from '../hooks/useJobProgress'
 
 type Status = 'idle' | 'loading' | 'done' | 'error'
@@ -201,6 +202,11 @@ interface AppState {
   customPresetWidth: number
   customPresetHeight: number
 
+  // Drafts
+  currentDraftId: string | null
+  currentDraftName: string
+  lastVideoUrl: string | null
+
   // Format
   videoFormat: VideoFormat
   standardBgColor: string
@@ -367,6 +373,10 @@ const initialState: AppState = {
   customPresetWidth: 1080,
   customPresetHeight: 1920,
 
+  currentDraftId: null,
+  currentDraftName: 'Untitled',
+  lastVideoUrl: null,
+
   videoFormat: 'standard',
   standardBgColor: '000000',
   socialBgColor: 'FFFFFF',
@@ -397,6 +407,9 @@ export default function HomePage() {
     watermarkTextWeight: 400,
     watermarkStroke: 0,
     watermarkStrokeColor: 'FFFFFF',
+    currentDraftId: null,
+    currentDraftName: 'Untitled',
+    lastVideoUrl: null,
   }))
   const overlayPreviewUrlRef = useRef<string | null>(null)
   const watermarkPreviewUrlRef = useRef<string | null>(null)
@@ -531,6 +544,113 @@ export default function HomePage() {
     return () => window.removeEventListener('keydown', handler)
   }, [handleUndo, handleRedo])
 
+  // ── Drafts ──
+  const [showDrafts, setShowDrafts] = useState(false)
+
+  const serializeState = useCallback((s: AppState): Record<string, unknown> => {
+    return {
+      version: 1,
+      importJobId: s.importJobId,
+      clips: s.clips.map(c => ({
+        ...c,
+        trimProgress: 0,
+        exportProgress: 0,
+      })),
+      activeClipId: s.activeClipId,
+      subtitleFontSize: s.subtitleFontSize,
+      subtitleColor: s.subtitleColor,
+      subtitlePosition: s.subtitlePosition,
+      subtitleFontFamily: s.subtitleFontFamily,
+      subtitleBold: s.subtitleBold,
+      subtitleOutlineWidth: s.subtitleOutlineWidth,
+      subtitleTextAlign: s.subtitleTextAlign,
+      customTextFontSize: s.customTextFontSize,
+      customTextColor: s.customTextColor,
+      customTextPosition: s.customTextPosition,
+      customTextFontFamily: s.customTextFontFamily,
+      customTextBold: s.customTextBold,
+      customTextOutlineWidth: s.customTextOutlineWidth,
+      customTextAlign: s.customTextAlign,
+      custom2TextFontSize: s.custom2TextFontSize,
+      custom2TextColor: s.custom2TextColor,
+      custom2TextPosition: s.custom2TextPosition,
+      custom2TextFontFamily: s.custom2TextFontFamily,
+      custom2TextBold: s.custom2TextBold,
+      custom2TextOutlineWidth: s.custom2TextOutlineWidth,
+      custom2TextAlign: s.custom2TextAlign,
+      muteOriginalAudio: s.muteOriginalAudio,
+      originalVolume: s.originalVolume,
+      voiceoverVolume: s.voiceoverVolume,
+      bgMusicEnabled: s.bgMusicEnabled,
+      bgMusicVolume: s.bgMusicVolume,
+      bgMusicFadeIn: s.bgMusicFadeIn,
+      bgMusicFadeOut: s.bgMusicFadeOut,
+      audioDuckEnabled: s.audioDuckEnabled,
+      audioDuckVolume: s.audioDuckVolume,
+      overlayEnabled: s.overlayEnabled,
+      overlayX: s.overlayX,
+      overlayY: s.overlayY,
+      overlayRotation: s.overlayRotation,
+      overlayScale: s.overlayScale,
+      watermarkEnabled: s.watermarkEnabled,
+      watermarkPosition: s.watermarkPosition,
+      watermarkScale: s.watermarkScale,
+      watermarkOpacity: s.watermarkOpacity,
+      watermark2Enabled: s.watermark2Enabled,
+      watermark2Position: s.watermark2Position,
+      watermark2Scale: s.watermark2Scale,
+      watermark2Opacity: s.watermark2Opacity,
+      lowerThirdEnabled: s.lowerThirdEnabled,
+      lowerThirdName: s.lowerThirdName,
+      lowerThirdSubtitle: s.lowerThirdSubtitle,
+      lowerThirdTemplate: s.lowerThirdTemplate,
+      lowerThirdDuration: s.lowerThirdDuration,
+      videoFormat: s.videoFormat,
+      standardBgColor: s.standardBgColor,
+      socialBgColor: s.socialBgColor,
+      socialVideoScale: s.socialVideoScale,
+      videoOffsetX: s.videoOffsetX,
+      videoOffsetY: s.videoOffsetY,
+      cinematicBgColor: s.cinematicBgColor,
+      videoBarHeight: s.videoBarHeight,
+      activePlatformPresetId: s.activePlatformPreset.id,
+      customPresetWidth: s.customPresetWidth,
+      customPresetHeight: s.customPresetHeight,
+    }
+  }, [])
+
+  // Auto-save draft every 30 seconds when there are clips
+  useEffect(() => {
+    if (state.clips.length === 0 || state.importStatus !== 'done') return
+    const timer = setTimeout(async () => {
+      try {
+        const { id } = await saveDraft({
+          id: state.currentDraftId ?? undefined,
+          name: state.currentDraftName,
+          sourceVideoUrl: state.lastVideoUrl,
+          sourceVideoDuration: state.sourceVideoDuration,
+          state: serializeState(state),
+        })
+        setState(prev => ({ ...prev, currentDraftId: id }))
+      } catch { /* silent */ }
+    }, 30000)
+    return () => clearTimeout(timer)
+  }, [state.clips, state.activeStep, state.currentDraftId, state.currentDraftName, state.lastVideoUrl, state.sourceVideoDuration, state.importStatus, serializeState])
+
+  const handleSaveDraftNow = useCallback(async () => {
+    if (state.clips.length === 0) return
+    try {
+      const { id } = await saveDraft({
+        id: state.currentDraftId ?? undefined,
+        name: state.currentDraftName,
+        sourceVideoUrl: state.lastVideoUrl,
+        sourceVideoDuration: state.sourceVideoDuration,
+        state: serializeState(state),
+      })
+      setState(prev => ({ ...prev, currentDraftId: id }))
+    } catch { /* silent */ }
+  }, [state, serializeState])
+
   // --- Handlers ---
   const handleDownload = useCallback(async (url: string) => {
     updateState({
@@ -544,12 +664,87 @@ export default function HomePage() {
     })
     try {
       const { jobId } = await downloadVideo(url)
-      updateState({ importJobId: jobId })
+      updateState({ importJobId: jobId, lastVideoUrl: url })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Download failed'
       updateState({ importStatus: 'error', importError: message })
     }
   }, [updateState])
+
+  const handleLoadDraft = useCallback(async (draftId: string) => {
+    try {
+      const draft = await loadDraft(draftId)
+      const data = draft.state as Record<string, unknown>
+      if (!data.clips) return
+      const preset = PLATFORM_PRESETS.find(p => p.id === (data.activePlatformPresetId as string)) ?? DEFAULT_PRESET
+      setState(prev => ({
+        ...prev,
+        importJobId: (data.importJobId as string) ?? prev.importJobId,
+        clips: (data.clips as Clip[]) ?? prev.clips,
+        activeClipId: (data.activeClipId as string) ?? null,
+        subtitleFontSize: (data.subtitleFontSize as number) ?? prev.subtitleFontSize,
+        subtitleColor: (data.subtitleColor as string) ?? prev.subtitleColor,
+        subtitlePosition: (data.subtitlePosition as SubtitlePosition) ?? prev.subtitlePosition,
+        subtitleFontFamily: (data.subtitleFontFamily as string) ?? prev.subtitleFontFamily,
+        subtitleBold: (data.subtitleBold as boolean) ?? prev.subtitleBold,
+        subtitleOutlineWidth: (data.subtitleOutlineWidth as number) ?? prev.subtitleOutlineWidth,
+        subtitleTextAlign: (data.subtitleTextAlign as 'center' | 'left') ?? prev.subtitleTextAlign,
+        customTextFontSize: (data.customTextFontSize as number) ?? prev.customTextFontSize,
+        customTextColor: (data.customTextColor as string) ?? prev.customTextColor,
+        customTextPosition: (data.customTextPosition as SubtitlePosition) ?? prev.customTextPosition,
+        customTextFontFamily: (data.customTextFontFamily as string) ?? prev.customTextFontFamily,
+        customTextBold: (data.customTextBold as boolean) ?? prev.customTextBold,
+        customTextOutlineWidth: (data.customTextOutlineWidth as number) ?? prev.customTextOutlineWidth,
+        customTextAlign: (data.customTextAlign as 'center' | 'left') ?? prev.customTextAlign,
+        custom2TextFontSize: (data.custom2TextFontSize as number) ?? prev.custom2TextFontSize,
+        custom2TextColor: (data.custom2TextColor as string) ?? prev.custom2TextColor,
+        custom2TextPosition: (data.custom2TextPosition as SubtitlePosition) ?? prev.custom2TextPosition,
+        custom2TextFontFamily: (data.custom2TextFontFamily as string) ?? prev.custom2TextFontFamily,
+        custom2TextBold: (data.custom2TextBold as boolean) ?? prev.custom2TextBold,
+        custom2TextOutlineWidth: (data.custom2TextOutlineWidth as number) ?? prev.custom2TextOutlineWidth,
+        custom2TextAlign: (data.custom2TextAlign as 'center' | 'left') ?? prev.custom2TextAlign,
+        muteOriginalAudio: (data.muteOriginalAudio as boolean) ?? prev.muteOriginalAudio,
+        originalVolume: (data.originalVolume as number) ?? prev.originalVolume,
+        voiceoverVolume: (data.voiceoverVolume as number) ?? prev.voiceoverVolume,
+        bgMusicEnabled: (data.bgMusicEnabled as boolean) ?? prev.bgMusicEnabled,
+        bgMusicVolume: (data.bgMusicVolume as number) ?? prev.bgMusicVolume,
+        bgMusicFadeIn: (data.bgMusicFadeIn as boolean) ?? prev.bgMusicFadeIn,
+        bgMusicFadeOut: (data.bgMusicFadeOut as boolean) ?? prev.bgMusicFadeOut,
+        audioDuckEnabled: (data.audioDuckEnabled as boolean) ?? prev.audioDuckEnabled,
+        audioDuckVolume: (data.audioDuckVolume as number) ?? prev.audioDuckVolume,
+        overlayEnabled: (data.overlayEnabled as boolean) ?? prev.overlayEnabled,
+        overlayX: (data.overlayX as number) ?? prev.overlayX,
+        overlayY: (data.overlayY as number) ?? prev.overlayY,
+        overlayRotation: (data.overlayRotation as number) ?? prev.overlayRotation,
+        overlayScale: (data.overlayScale as number) ?? prev.overlayScale,
+        lowerThirdEnabled: (data.lowerThirdEnabled as boolean) ?? prev.lowerThirdEnabled,
+        lowerThirdName: (data.lowerThirdName as string) ?? prev.lowerThirdName,
+        lowerThirdSubtitle: (data.lowerThirdSubtitle as string) ?? prev.lowerThirdSubtitle,
+        lowerThirdTemplate: (data.lowerThirdTemplate as 'clean-line' | 'dark-chip' | 'broadcast') ?? prev.lowerThirdTemplate,
+        lowerThirdDuration: (data.lowerThirdDuration as number) ?? prev.lowerThirdDuration,
+        videoFormat: (data.videoFormat as VideoFormat) ?? prev.videoFormat,
+        standardBgColor: (data.standardBgColor as string) ?? prev.standardBgColor,
+        socialBgColor: (data.socialBgColor as string) ?? prev.socialBgColor,
+        socialVideoScale: (data.socialVideoScale as number) ?? prev.socialVideoScale,
+        videoOffsetX: (data.videoOffsetX as number) ?? prev.videoOffsetX,
+        videoOffsetY: (data.videoOffsetY as number) ?? prev.videoOffsetY,
+        cinematicBgColor: (data.cinematicBgColor as string) ?? prev.cinematicBgColor,
+        videoBarHeight: (data.videoBarHeight as number) ?? prev.videoBarHeight,
+        activePlatformPreset: preset,
+        customPresetWidth: (data.customPresetWidth as number) ?? prev.customPresetWidth,
+        customPresetHeight: (data.customPresetHeight as number) ?? prev.customPresetHeight,
+        importStatus: 'done',
+        currentDraftId: draft.id,
+        currentDraftName: draft.name,
+        lastVideoUrl: draft.sourceVideoUrl,
+      }))
+      // If draft has a source video URL, re-download it
+      if (draft.sourceVideoUrl) {
+        handleDownload(draft.sourceVideoUrl)
+      }
+      setShowDrafts(false)
+    } catch { /* silent */ }
+  }, [handleDownload])
 
   const handleTrimClip = useCallback(async (clipId: string, clipOverride?: Clip) => {
     const importJobId = state.importJobId
@@ -1607,10 +1802,11 @@ export default function HomePage() {
         {!state.cropEditClipId && (
           <Sidebar
             activeStep={state.activeStep}
-            onStepChange={step => updateState({ activeStep: step })}
+            onStepChange={step => { updateState({ activeStep: step }); setShowDrafts(false) }}
             completedSteps={completedSteps}
             lockedSteps={lockedSteps}
             errorSteps={errorSteps}
+            onDraftsClick={() => setShowDrafts(true)}
           />
         )}
 
@@ -1731,9 +1927,19 @@ export default function HomePage() {
         {!state.cropEditClipId && (
           <div className="w-80 flex-shrink-0 glass-panel border-l flex flex-col h-full overflow-hidden relative z-10">
             <div className="flex-1 overflow-y-auto px-4 py-4">
-              <div key={state.activeStep} className="step-content-enter">
-                {renderStepContent()}
-              </div>
+              {showDrafts ? (
+                <div className="step-content-enter">
+                  <DraftsPanel
+                    currentDraftId={state.currentDraftId}
+                    onLoadDraft={handleLoadDraft}
+                    onClose={() => setShowDrafts(false)}
+                  />
+                </div>
+              ) : (
+                <div key={state.activeStep} className="step-content-enter">
+                  {renderStepContent()}
+                </div>
+              )}
             </div>
             <p className="text-center text-xs text-zinc-700 pb-2 flex-shrink-0">
               Local tool — API binds to 127.0.0.1 only

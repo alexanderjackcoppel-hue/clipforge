@@ -328,3 +328,54 @@ export async function exportVideo(params: ExportParams): Promise<{ jobId: string
   }
   return res.json() as Promise<{ jobId: string }>
 }
+
+// ── Drafts API ──
+
+export interface DraftMeta {
+  id: string
+  name: string
+  savedAt: string | null
+  sourceVideoUrl: string | null
+  sourceVideoDuration: number | null
+  clipCount: number
+}
+
+export async function listDrafts(): Promise<DraftMeta[]> {
+  const res = await fetch(`${API}/api/drafts`)
+  if (!res.ok) return []
+  const data = await res.json()
+  return data.drafts ?? []
+}
+
+export async function saveDraft(draft: {
+  id?: string
+  name: string
+  sourceVideoUrl: string | null
+  sourceVideoDuration: number | null
+  state: Record<string, unknown>
+}): Promise<{ id: string; savedAt: string }> {
+  const res = await fetch(`${API}/api/drafts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(draft),
+  })
+  if (!res.ok) throw new Error('Failed to save draft')
+  return res.json()
+}
+
+export async function loadDraft(id: string): Promise<{
+  id: string
+  name: string
+  savedAt: string
+  sourceVideoUrl: string | null
+  sourceVideoDuration: number | null
+  state: Record<string, unknown>
+}> {
+  const res = await fetch(`${API}/api/drafts/${encodeURIComponent(id)}`)
+  if (!res.ok) throw new Error('Draft not found')
+  return res.json()
+}
+
+export async function deleteDraft(id: string): Promise<void> {
+  await fetch(`${API}/api/drafts/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}

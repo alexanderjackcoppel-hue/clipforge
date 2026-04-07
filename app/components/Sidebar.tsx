@@ -1,6 +1,6 @@
 'use client'
 
-import { Download, Scissors, Frame, Subtitles, Volume2, Layers, Upload } from 'lucide-react'
+import { Download, Scissors, Frame, Subtitles, Volume2, Layers, Upload, FolderOpen } from 'lucide-react'
 import Tooltip from './Tooltip'
 
 export type EditorStep = 'import' | 'trim' | 'platform' | 'subtitles' | 'voiceover' | 'overlay' | 'export'
@@ -20,6 +20,7 @@ interface SidebarProps {
   completedSteps: Set<EditorStep>
   lockedSteps: Set<EditorStep>
   errorSteps: Set<EditorStep>
+  onDraftsClick?: () => void
 }
 
 export default function Sidebar({
@@ -28,6 +29,7 @@ export default function Sidebar({
   completedSteps,
   lockedSteps,
   errorSteps,
+  onDraftsClick,
 }: SidebarProps) {
   return (
     <nav
@@ -119,6 +121,23 @@ export default function Sidebar({
           activeStep === 'export' ? 'text-zinc-200' : 'text-zinc-500'
         }`}>
           Export
+        </span>
+      </button>
+
+      {/* Separator + Drafts */}
+      <div className="w-10 border-t border-border/40 my-1" />
+      <button
+        type="button"
+        onClick={() => onDraftsClick?.()}
+        className="w-[56px] flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all duration-150 hover:bg-surface-3/50 border border-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
+      >
+        <FolderOpen
+          size={20}
+          strokeWidth={1.8}
+          className="transition-colors duration-150 text-zinc-500"
+        />
+        <span className="text-[10px] font-medium leading-none transition-colors duration-150 text-zinc-500">
+          Drafts
         </span>
       </button>
     </nav>
