@@ -198,9 +198,10 @@ export default function PreviewPanel({
     }
     if (clipFlipH) transforms.push('scaleX(-1)')
     if (clipFlipV) transforms.push('scaleY(-1)')
-    // Show CSS crop preview — always apply when crop is non-default
-    // Once FFmpeg re-trim completes, the video itself is cropped so this becomes a no-op
-    const hasCrop = clipCrop && !(clipCrop.x === 0 && clipCrop.y === 0 && clipCrop.w === 100 && clipCrop.h === 100)
+    // Show CSS crop preview ONLY while re-trim is in progress (the source video
+    // is showing, not yet cropped by FFmpeg). Once trim completes, the trimmed video
+    // file is already cropped so clip-path would double-crop.
+    const hasCrop = clipCrop && clipIsTrimming && !(clipCrop.x === 0 && clipCrop.y === 0 && clipCrop.w === 100 && clipCrop.h === 100)
     const cropStyle: React.CSSProperties = hasCrop ? {
       clipPath: `inset(${clipCrop!.y}% ${100 - clipCrop!.x - clipCrop!.w}% ${100 - clipCrop!.y - clipCrop!.h}% ${clipCrop!.x}%)`,
     } : {}
