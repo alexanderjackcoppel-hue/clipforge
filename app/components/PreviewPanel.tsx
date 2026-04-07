@@ -1184,27 +1184,24 @@ export default function PreviewPanel({
 
             {/* Auto subtitle layer */}
             {autoEnabled && !showOriginal && (
-              <div className="absolute"
-                style={{ left: 'var(--auto-x, 50%)', top: 'var(--auto-y, 85%)', transform: autoStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 25, cursor: 'move', pointerEvents: 'auto' }}
-                onMouseDown={e => { e.stopPropagation() }}>
+              <div className="absolute pointer-events-none"
+                style={{ left: 'var(--auto-x, 50%)', top: 'var(--auto-y, 85%)', transform: autoStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 25 }}>
                 <span style={subtitleStyle(autoStyle, activeLayer === 'custom')}>{autoText}</span>
               </div>
             )}
 
             {/* Custom text layer */}
             {customEnabled && !showOriginal && (
-              <div className="absolute"
-                style={{ left: 'var(--custom-x, 50%)', top: 'var(--custom-y, 50%)', transform: customStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 25, cursor: 'move', pointerEvents: 'auto' }}
-                onMouseDown={e => { e.stopPropagation() }}>
+              <div className="absolute pointer-events-none"
+                style={{ left: 'var(--custom-x, 50%)', top: 'var(--custom-y, 50%)', transform: customStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 25 }}>
                 <span style={subtitleStyle(customStyle, activeLayer === 'auto')}>{customText}</span>
               </div>
             )}
 
             {/* Custom text 2 layer */}
             {custom2Enabled && !showOriginal && (
-              <div className="absolute"
-                style={{ left: 'var(--custom2-x, 50%)', top: 'var(--custom2-y, 50%)', transform: custom2Style.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 25, cursor: 'move', pointerEvents: 'auto' }}
-                onMouseDown={e => { e.stopPropagation() }}>
+              <div className="absolute pointer-events-none"
+                style={{ left: 'var(--custom2-x, 50%)', top: 'var(--custom2-y, 50%)', transform: custom2Style.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 25 }}>
                 <span style={subtitleStyle(custom2Style, activeLayer !== 'custom2')}>{custom2Text}</span>
               </div>
             )}

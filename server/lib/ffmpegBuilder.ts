@@ -301,15 +301,9 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     const opacityFilter = wmOpacity < 1 ? `,format=rgba,colorchannelmixer=aa=${wmOpacity.toFixed(2)}` : ''
     const wmStroke = Math.max(0, Math.min(10, opts.watermarkStroke ?? 0))
     if (wmStroke > 0) {
-      const sc = (opts.watermarkStrokeColor ?? 'FFFFFF').replace('#', '')
-      const r = parseInt(sc.slice(0, 2), 16) / 255
-      const g = parseInt(sc.slice(2, 4), 16) / 255
-      const b = parseInt(sc.slice(4, 6), 16) / 255
-      // Scale → split → colorize+blur one copy for glow → overlay original on top
+      // Glow effect: blur a copy of the watermark and overlay original on top
       filterParts.push(`[${watermarkIdx}:v]scale=${wmWidth}:-1,format=rgba,split[wm_orig][wm_glow]`)
-      filterParts.push(`[wm_glow]colorchannelmixer=rr=0:rg=0:rb=0:ra=1:gr=0:gg=0:gb=0:ga=1:br=0:bg=0:bb=0:ba=1:ar=0:ag=0:ab=0:aa=1,` +
-        `geq=r=${Math.round(r * 255)}:g=${Math.round(g * 255)}:b=${Math.round(b * 255)}:a='alpha(X,Y)',` +
-        `gblur=sigma=${wmStroke}${opacityFilter}[wm_shadow]`)
+      filterParts.push(`[wm_glow]gblur=sigma=${wmStroke * 2}[wm_shadow]`)
       filterParts.push(`[wm_shadow][wm_orig]overlay=0:0${opacityFilter}[wm]`)
     } else {
       filterParts.push(`[${watermarkIdx}:v]scale=${wmWidth}:-1${opacityFilter}[wm]`)
@@ -336,14 +330,8 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     const opacityFilter2 = wm2Opacity < 1 ? `,format=rgba,colorchannelmixer=aa=${wm2Opacity.toFixed(2)}` : ''
     const wm2Stroke = Math.max(0, Math.min(10, opts.watermark2Stroke ?? 0))
     if (wm2Stroke > 0) {
-      const sc2 = (opts.watermark2StrokeColor ?? 'FFFFFF').replace('#', '')
-      const r2 = parseInt(sc2.slice(0, 2), 16) / 255
-      const g2 = parseInt(sc2.slice(2, 4), 16) / 255
-      const b2 = parseInt(sc2.slice(4, 6), 16) / 255
       filterParts.push(`[${watermark2Idx}:v]scale=${wm2Width}:-1,format=rgba,split[wm2_orig][wm2_glow]`)
-      filterParts.push(`[wm2_glow]colorchannelmixer=rr=0:rg=0:rb=0:ra=1:gr=0:gg=0:gb=0:ga=1:br=0:bg=0:bb=0:ba=1:ar=0:ag=0:ab=0:aa=1,` +
-        `geq=r=${Math.round(r2 * 255)}:g=${Math.round(g2 * 255)}:b=${Math.round(b2 * 255)}:a='alpha(X,Y)',` +
-        `gblur=sigma=${wm2Stroke}${opacityFilter2}[wm2_shadow]`)
+      filterParts.push(`[wm2_glow]gblur=sigma=${wm2Stroke * 2}[wm2_shadow]`)
       filterParts.push(`[wm2_shadow][wm2_orig]overlay=0:0${opacityFilter2}[wm2]`)
     } else {
       filterParts.push(`[${watermark2Idx}:v]scale=${wm2Width}:-1${opacityFilter2}[wm2]`)
