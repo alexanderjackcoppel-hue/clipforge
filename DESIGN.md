@@ -9,7 +9,7 @@
 ## Aesthetic Direction
 - **Direction:** Industrial / Utilitarian — "Developer-grade creator tool"
 - **Decoration level:** Minimal — the workflow is the interface; no decoration that doesn't earn its place
-- **Mood:** Precise, purposeful, fast. The tool should feel like a well-engineered CLI wrapped in a thoughtful UI. Vercel/Linear energy applied to video editing. No gradients, no hero imagery, no ambient glow.
+- **Mood:** Precise, purposeful, fast. The tool should feel like a well-engineered CLI wrapped in a thoughtful UI. Vercel/Linear energy applied to video editing. Subtle ambient gradient orbs (violet top-left, blue bottom-right) provide depth for glassmorphic panels.
 - **Competitive position:** CapCut is consumer/teal, Descript is editorial/maroon, Runway is cinematic/monochrome. ClipForge owns the **violet + developer-tools** space — nobody else in video editing is here.
 
 ## Typography
@@ -34,17 +34,23 @@
 
 - **Approach:** Restrained — single violet accent + cool neutral scale. Color is rare and meaningful; it's not decoration.
 
-### Palette
+### Surface System (blue-tinted layered darks)
 | Token         | Hex       | Tailwind        | Usage                                      |
 |---------------|-----------|-----------------|--------------------------------------------|
-| Primary       | `#7c3aed` | `violet-600`    | Buttons, progress bars, active states, step numbers |
+| Surface base  | `#0f0f14` | `bg-surface-base` | Page background (blue-tinted, not pure black) |
+| Surface 1     | `#1a1a24` | `bg-surface-1`  | Panels, sidebar, step cards                |
+| Surface 2     | `#222230` | `bg-surface-2`  | Input backgrounds, clip rows, cards        |
+| Surface 3     | `#2a2a3a` | `bg-surface-3`  | Hover states, active items                 |
+| Border subtle | `rgba(255,255,255,0.06)` | `border-subtle` | Glass panel borders       |
+| Border default| `#2e2e3e` | `border-border` | Card borders, input borders                |
+| Border bright | `#3a3a4e` | `border-bright` | Hover borders                              |
+
+### Accent Palette
+| Token         | Hex       | Tailwind        | Usage                                      |
+|---------------|-----------|-----------------|--------------------------------------------|
+| Primary       | `#7c3aed` | `violet-600`    | Buttons, progress bars, active states      |
 | Primary hover | `#8b5cf6` | `violet-500`    | Button hover, interactive element hover    |
-| Mono accent   | `#a78bfa` | `violet-400`    | Mono text (timestamps in violet context)   |
-| Bg base       | `#09090b` | `zinc-950`      | Page background                            |
-| Bg raised     | `#18181b` | `zinc-900`      | Step cards                                 |
-| Bg float      | `#27272a` | `zinc-800`      | Input backgrounds, clip rows               |
-| Border        | `#3f3f46` | `zinc-700`      | Card borders, input borders                |
-| Border sub    | `#27272a` | `zinc-800`      | Subtle dividers, inner card borders        |
+| Mono accent   | `#a78bfa` | `violet-400`    | Mono text, sidebar active icons            |
 | Text hi       | `#f4f4f5` | `zinc-100`      | Primary text, headings                     |
 | Text mid      | `#a1a1aa` | `zinc-400`      | Secondary text, labels                     |
 | Text lo       | `#71717a` | `zinc-500`      | Placeholder, disabled, hint text           |
@@ -95,15 +101,57 @@ This is a dark-only tool. No light mode. Do not add light mode variants unless e
 | radius-full | 9999px | `rounded-full` | Progress bars, toggle pills |
 
 ## Motion
-- **Approach:** Minimal-functional — only transitions that aid comprehension. No decorative animation.
+- **Approach:** Purposeful — transitions that aid comprehension plus micro-delight at key moments.
 - **Easing:** `cubic-bezier(0.16, 1, 0.3, 1)` (ease-out) for all transitions
 - **Duration:**
   - **Micro (color/hover):** 150ms — `transition-colors duration-150`
   - **Short (state change):** 200ms — `transition-all duration-200`
   - **Medium (progress bars):** 300ms — `transition-all duration-300`
-- **Never use:** Entrance animations, scroll-driven effects, decorative loaders, skeleton shimmer (not needed for a local tool)
+- **Allowed animations:**
+  - **Progress shimmer:** Diagonal white-to-transparent gradient sweep on active progress bars (`.progress-shimmer`)
+  - **Step transitions:** 150ms slide-up + fade when switching step panels (`.step-content-enter`)
+  - **Export celebration:** 300ms scale-in on export completion row; ring-pulse on checkmarks
+  - **Completion glow:** 600ms violet box-shadow pulse when progress reaches 100%
+- **Never use:** Scroll-driven effects, skeleton shimmer, decorative loaders
+
+## Glassmorphism
+
+Sidebar, top bar, properties panel, and dropdowns use translucent glass surfaces:
+```css
+.glass-panel {
+  background: rgba(24, 24, 27, 0.65);
+  backdrop-filter: blur(16px);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+```
+
+The ambient background gradient orbs (`.ambient-bg`) on the main container provide the color underneath that makes the glass visible. Without them, glass on flat black is invisible.
+
+## Sidebar
+
+Icon rail navigation (72px wide). Each step: centered Lucide icon (20px, strokeWidth 1.8) + label below (10px text). Active state: `rounded-xl bg-surface-3 border border-violet-500/20` with violet icon fill. Completed: small emerald dot at top-right of icon. Package: `lucide-react`.
 
 ## Component Conventions
+
+### Buttons
+```tsx
+// Primary (gradient)
+<button className="btn-gradient btn-press text-white font-semibold rounded-lg px-6 py-2.5 text-sm">
+  Export
+</button>
+
+// Secondary
+<button className="bg-surface-2 hover:bg-surface-3 border border-border text-zinc-300 rounded-lg px-4 py-2.5 text-sm transition-colors">
+  Choose File
+</button>
+```
+
+### Segmented Tab Control
+```tsx
+<div className="flex gap-0.5 bg-surface-2 rounded-lg p-[3px] border border-border">
+  <button className={active ? 'bg-violet-600 text-white rounded-md' : 'text-zinc-500'}>Tab</button>
+</div>
+```
 
 ### Step Cards
 ```tsx
@@ -162,3 +210,14 @@ All timestamps, percentages, frame counts, file paths, and technical measurement
 | 2026-03-19 | JetBrains Mono for technical values only | Monospace exclusively for timestamps/percentages reinforces precision signal. Geist Mono not available in Next.js 14 Google Fonts integration. |
 | 2026-03-19 | Clip rows use bg-zinc-800/50         | Differentiates clip rows from step card background (zinc-900). Found during `/plan-design-review` audit |
 | 2026-03-19 | Dark-only, no light mode             | Creator tools live in dark. Light mode adds complexity without user demand for this product |
+| 2026-03-29 | Ambient gradient orbs + glassmorphism | Flat dark surfaces feel utilitarian. Subtle violet/blue gradient orbs at 5-8% opacity give depth; glass panels float over them. Researched CapCut, Runway, Opus Clip patterns |
+| 2026-03-29 | Progress bar shimmer animation       | Static progress fills don't signal activity. Diagonal white sweep (1.5s loop) signals the app is working |
+| 2026-03-29 | Step panel slide-in transition       | Instant content swap on step change feels jarring. 150ms slide-up + fade matches Linear's panel transitions |
+| 2026-03-29 | Richer empty state with drop-zone    | First-time experience matters. Dashed violet border + "Paste a URL" + Cmd+V hint is more inviting than a small icon |
+| 2026-03-29 | Sidebar active state glow            | Step number gets violet box-shadow glow + bg-violet-600/10 tint. Makes active step feel alive |
+| 2026-03-29 | Export celebration animation         | Scale-in + ring-pulse on completion provides micro-delight. Subtle enough to not annoy on repeat |
+| 2026-04-05 | Surface colors: blue-tinted darks    | Replaced flat zinc grays (#09090b/#18181b/#27272a) with blue-tinted surfaces (#0f0f14/#1a1a24/#222230). Gives depth like CapCut/Runway |
+| 2026-04-05 | Sidebar: 72px icon rail              | Replaced 192px text sidebar with Lucide React icons + tiny labels. Reclaims 120px for preview. CapCut-style navigation |
+| 2026-04-05 | Gradient primary buttons              | Export buttons use violet-500→violet-600 gradient with glow shadow. Feels premium vs flat bg-violet-600 |
+| 2026-04-05 | Pill segmented tab control           | SubtitlesStep tabs use bg-surface-2 container + bg-violet-600 active pill. Matches CapCut/Linear pattern |
+| 2026-04-05 | Export specs as pill badges           | Output format shown as individual pills (1080x1920, H.264, AAC, MP4) instead of plain text |

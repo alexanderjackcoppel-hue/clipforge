@@ -1,6 +1,7 @@
 import express from 'express'
-import { mkdirSync, existsSync } from 'fs'
-import { join } from 'path'
+import { mkdirSync, existsSync, copyFileSync, readFileSync, writeFileSync } from 'fs'
+import { join, resolve } from 'path'
+import { homedir } from 'os'
 import { execSync } from 'child_process'
 import { cleanupOldJobs } from './lib/cleanup.js'
 import { jobManager, isValidJobId } from './lib/jobManager.js'
@@ -13,6 +14,7 @@ import thumbnailRouter from './routes/thumbnail.js'
 import ttsRouter from './routes/tts.js'
 import silenceRouter from './routes/silence.js'
 import waveformRouter from './routes/waveform.js'
+import draftsRouter from './routes/drafts.js'
 
 export const TMP_DIR = join('/tmp', 'clipforge')
 mkdirSync(TMP_DIR, { recursive: true })
@@ -118,6 +120,68 @@ app.use('/api/thumbnail', thumbnailRouter)
 app.use('/api/tts', ttsRouter)
 app.use('/api/silence-detect', silenceRouter)
 app.use('/api/waveform', waveformRouter)
+app.use('/api/drafts', draftsRouter)
+
+// --- Save folder config ---
+const CONFIG_PATH = join(homedir(), '.clipforge-config.json')
+
+function getSaveFolder(): string | null {
+  try {
+    const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'))
+    return config.saveFolder || null
+  } catch { return null }
+}
+
+function setSaveFolder(folder: string) {
+  let config: Record<string, unknown> = {}
+  try { config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) } catch { /* new config */ }
+  config.saveFolder = folder
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2))
+}
+
+app.get('/api/save-folder', (_req, res) => {
+  res.json({ folder: getSaveFolder() })
+})
+
+app.post('/api/save-folder', express.json(), (req, res) => {
+  const { folder } = req.body as { folder?: string }
+  if (!folder || typeof folder !== 'string') {
+    res.status(400).json({ error: 'folder is required' })
+    return
+  }
+  const resolved = resolve(folder.replace(/^~/, homedir()))
+  mkdirSync(resolved, { recursive: true })
+  setSaveFolder(resolved)
+  res.json({ folder: resolved })
+})
+
+app.post('/api/save-to-folder', express.json(), (req, res) => {
+  const { jobId, clipSuffix, fileName } = req.body as { jobId?: string; clipSuffix?: string; fileName?: string }
+  if (!jobId || !isValidJobId(jobId)) {
+    res.status(400).json({ error: 'Invalid job ID' })
+    return
+  }
+  const folder = getSaveFolder()
+  if (!folder) {
+    res.status(400).json({ error: 'No save folder configured. Set one first.' })
+    return
+  }
+  const sfx = clipSuffix ? `_${clipSuffix}` : ''
+  const srcPath = join(TMP_DIR, jobId, `final${sfx}.mp4`)
+  if (!existsSync(srcPath)) {
+    res.status(404).json({ error: 'Exported file not found' })
+    return
+  }
+  const safeName = (fileName || `clip${sfx}`).replace(/[/\\<>:"|?*]/g, '_').replace(/\.mp4$/i, '')
+  const destPath = join(folder, `${safeName}.mp4`)
+  try {
+    copyFileSync(srcPath, destPath)
+    res.json({ path: destPath })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Save failed'
+    res.status(500).json({ error: message })
+  }
+})
 
 // --- Cleanup ---
 setInterval(cleanupOldJobs, 30 * 60 * 1000)

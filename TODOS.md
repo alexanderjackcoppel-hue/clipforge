@@ -1,12 +1,6 @@
 # TODOS
 
-## Route integration tests
-**What:** Add supertest-based integration tests for the Express route error paths (download, trim, export, transcribe).
-**Why:** Current tests cover regex validation in isolation but not the actual route handlers — file existence checks, error classification, job creation, and response shapes are all untested. A route refactor could silently break the API.
-**Pros:** Catches regressions in route logic, not just regex logic.
-**Cons:** Requires spinning up Express in test and mocking filesystem/ffmpeg. ~1.5h CC work.
-**Context:** See `server/routes/*.ts`. Focus on error paths: missing trimmed video, invalid jobId, malformed body. Happy path is covered by manual testing.
-**Depends on:** None.
+## ~~Route integration tests~~ ✓ DONE — Added on 2026-03-29. 24 supertest-based integration tests in `tests/routes.integration.test.ts` covering download, trim, transcribe, export, and TTS routes. Tests validation error paths (invalid jobId, bad clipSuffix, malformed time, missing source/trimmed video, invalid dimensions, bad hex colors, missing/empty text) plus happy-path jobId responses. Uses vi.mock for TMP_DIR and spawnJob.
 
 ---
 

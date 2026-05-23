@@ -1,5 +1,6 @@
 'use client'
 import { useRef, useEffect, useCallback, useState } from 'react'
+import Tooltip from './Tooltip'
 
 interface Pos { x: number; y: number }
 type CropRect = { x: number; y: number; w: number; h: number }
@@ -40,6 +41,29 @@ interface PreviewPanelProps {
   overlayRotation: number
   overlayScale: number
   onOverlayMove: (x: number, y: number) => void
+  // Watermark 1
+  watermarkEnabled: boolean
+  watermarkMode: 'image' | 'text'
+  watermarkPreviewUrl: string | null
+  watermarkText: string
+  watermarkTextColor: string
+  watermarkTextWeight: number
+  watermarkPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'custom'
+  watermarkCustomX: number
+  watermarkCustomY: number
+  onWatermarkPositionDrag: (x: number, y: number) => void
+  watermarkScale: number
+  watermarkOpacity: number
+  watermarkStroke: number
+  watermarkStrokeColor: string
+  // Watermark 2
+  watermark2Enabled: boolean
+  watermark2PreviewUrl: string | null
+  watermark2Position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'custom'
+  watermark2Scale: number
+  watermark2Opacity: number
+  watermark2Stroke: number
+  watermark2StrokeColor: string
   videoFormat: 'standard' | 'social-post' | 'cinematic' | 'blur-bg'
   standardBgColor: string
   socialBgColor: string
@@ -69,6 +93,13 @@ interface PreviewPanelProps {
   onToggleShowOriginal?: () => void
   showGrid?: boolean
   onToggleShowGrid?: () => void
+  // Active clip effects for live preview
+  clipColorPreset?: string
+  clipFlipH?: boolean
+  clipFlipV?: boolean
+  // Active clip crop (for CSS preview while re-trim is pending)
+  clipCrop?: { x: number; y: number; w: number; h: number }
+  clipIsTrimming?: boolean
 }
 
 function overlayCSS(x: number, y: number, rotation: number, scale: number): React.CSSProperties {
@@ -109,6 +140,8 @@ export default function PreviewPanel({
   custom2Enabled, custom2Lines, custom2Style, onCustom2PositionChange,
   emojiStickers, onEmojiMove,
   overlayEnabled, overlayPreviewUrl, overlayX, overlayY, overlayRotation, overlayScale, onOverlayMove,
+  watermarkEnabled, watermarkMode, watermarkPreviewUrl, watermarkText, watermarkTextColor, watermarkTextWeight, watermarkPosition, watermarkCustomX, watermarkCustomY, onWatermarkPositionDrag, watermarkScale, watermarkOpacity, watermarkStroke, watermarkStrokeColor,
+  watermark2Enabled, watermark2PreviewUrl, watermark2Position, watermark2Scale, watermark2Opacity, watermark2Stroke, watermark2StrokeColor,
   videoFormat, standardBgColor, socialBgColor, socialVideoScale, onSocialVideoScaleChange,
   cinematicBgColor, videoBarHeight,
   videoOffsetX, videoOffsetY, onVideoOffsetChange,
@@ -118,9 +151,67 @@ export default function PreviewPanel({
   presetWidth, presetHeight,
   showOriginal, onToggleShowOriginal,
   showGrid, onToggleShowGrid,
+  clipColorPreset, clipFlipH, clipFlipV,
+  clipCrop, clipIsTrimming,
 }: PreviewPanelProps) {
   const containerRef     = useRef<HTMLDivElement>(null)
   const videoRef         = useRef<HTMLVideoElement>(null)
+
+  // CSS filter to approximate FFmpeg color presets in real-time preview
+  const videoFilterStyle: React.CSSProperties = (() => {
+    const filters: string[] = []
+    const transforms: string[] = []
+    switch (clipColorPreset) {
+      // Basic
+      case 'warm':      filters.push('contrast(1.05)', 'brightness(1.02)', 'saturate(1.2)', 'sepia(0.1)'); break
+      case 'cool':      filters.push('contrast(1.05)', 'saturate(1.1)', 'hue-rotate(10deg)'); break
+      case 'vivid':     filters.push('contrast(1.15)', 'brightness(1.03)', 'saturate(1.6)'); break
+      case 'cinematic': filters.push('contrast(1.1)', 'brightness(0.98)', 'saturate(0.85)'); break
+      case 'bw':        filters.push('grayscale(1)', 'contrast(1.1)'); break
+      case 'faded':     filters.push('contrast(0.85)', 'brightness(1.08)', 'saturate(0.7)'); break
+      case 'night':     filters.push('contrast(1.2)', 'brightness(0.92)', 'saturate(0.9)', 'hue-rotate(-10deg)'); break
+      // Stylized FX
+      case 'vintage':   filters.push('contrast(0.9)', 'brightness(1.05)', 'saturate(0.6)', 'sepia(0.3)'); break
+      case 'retro':     filters.push('contrast(1.0)', 'brightness(1.04)', 'saturate(0.8)', 'sepia(0.2)'); break
+      case 'cyberpunk': filters.push('contrast(1.3)', 'brightness(0.97)', 'saturate(1.4)', 'hue-rotate(280deg)'); break
+      case 'dreamy':    filters.push('contrast(0.8)', 'brightness(1.1)', 'saturate(0.9)', 'blur(0.5px)'); break
+      case 'film':      filters.push('contrast(1.05)', 'brightness(0.99)', 'saturate(0.9)', 'sepia(0.05)'); break
+      case 'vignette':  filters.push('contrast(1.05)'); break // vignette done via CSS shadow below
+      case 'hicon':     filters.push('contrast(1.4)', 'brightness(0.97)', 'saturate(1.1)'); break
+      case 'bleach':    filters.push('contrast(1.3)', 'saturate(0.4)'); break
+      case 'tealorg':   filters.push('contrast(1.1)', 'saturate(1.2)', 'hue-rotate(-5deg)'); break
+      case 'sunset':    filters.push('contrast(1.05)', 'brightness(1.03)', 'saturate(1.3)', 'sepia(0.15)'); break
+      case 'arctic':    filters.push('contrast(1.1)', 'brightness(1.05)', 'saturate(0.7)', 'hue-rotate(15deg)'); break
+      case 'neon':      filters.push('contrast(1.25)', 'saturate(2.0)'); break
+      case 'sepia':     filters.push('sepia(0.8)', 'contrast(1.05)'); break
+      case 'lomo':      filters.push('contrast(1.3)', 'brightness(0.95)', 'saturate(1.3)', 'sepia(0.1)'); break
+      case 'chrome':    filters.push('contrast(1.2)', 'brightness(1.02)', 'saturate(0.3)'); break
+      case 'noir':      filters.push('grayscale(1)', 'contrast(1.35)', 'brightness(0.95)'); break
+      case 'popart':    filters.push('contrast(1.5)', 'brightness(1.05)', 'saturate(2.5)'); break
+      case 'golden':    filters.push('contrast(1.05)', 'brightness(1.04)', 'saturate(1.1)', 'sepia(0.15)'); break
+      case 'moody':     filters.push('contrast(1.15)', 'brightness(0.94)', 'saturate(0.75)', 'hue-rotate(-5deg)'); break
+      case 'pastel':    filters.push('contrast(0.75)', 'brightness(1.12)', 'saturate(0.65)'); break
+    }
+    // Vignette uses an inset box-shadow overlay instead of a filter
+    if (clipColorPreset === 'vignette') {
+      // handled via a separate overlay div
+    }
+    if (clipFlipH) transforms.push('scaleX(-1)')
+    if (clipFlipV) transforms.push('scaleY(-1)')
+    // Show CSS crop preview ONLY while re-trim is in progress (the source video
+    // is showing, not yet cropped by FFmpeg). Once trim completes, the trimmed video
+    // file is already cropped so clip-path would double-crop.
+    const hasCrop = clipCrop && clipIsTrimming && !(clipCrop.x === 0 && clipCrop.y === 0 && clipCrop.w === 100 && clipCrop.h === 100)
+    const cropStyle: React.CSSProperties = hasCrop ? {
+      clipPath: `inset(${clipCrop!.y}% ${100 - clipCrop!.x - clipCrop!.w}% ${100 - clipCrop!.y - clipCrop!.h}% ${clipCrop!.x}%)`,
+    } : {}
+
+    return {
+      ...(filters.length > 0 ? { filter: filters.join(' ') } : {}),
+      ...(transforms.length > 0 ? { transform: transforms.join(' ') } : {}),
+      ...cropStyle,
+    }
+  })()
 
   // Crop editor refs
   const cropContainerRef = useRef<HTMLDivElement>(null)
@@ -158,6 +249,7 @@ export default function PreviewPanel({
 
   // Subtitle drag
   const isDraggingRef   = useRef(false)
+  const subDragStartRef = useRef<{ mx: number; my: number; initX: number; initY: number } | null>(null)
   const rafRef          = useRef<number | null>(null)
   const lastPosRef      = useRef<{ pos: Pos; layer: 'auto' | 'custom' | 'custom2' | 'emoji' } | null>(null)
 
@@ -173,6 +265,10 @@ export default function PreviewPanel({
   const overlayDragStartRef = useRef<{ mx: number; my: number; initX: number; initY: number } | null>(null)
   const lastOverlayPosRef   = useRef<{ x: number; y: number } | null>(null)
   const overlayRafRef       = useRef<number | null>(null)
+
+  // Watermark drag
+  const wmDragRef      = useRef(false)
+  const wmDragStartRef = useRef<{ mx: number; my: number; initX: number; initY: number } | null>(null)
 
   // Snap guide lines
   const snapVLineRef    = useRef<HTMLDivElement>(null)
@@ -358,6 +454,20 @@ export default function PreviewPanel({
     else if (activeLayer === 'custom2') onCustom2PositionChange(pos)
   }
 
+  // ── Subtitle text drag start (delta-based, no teleport) ──
+  const handleSubtitleDragStart = (e: React.MouseEvent, layer: 'auto' | 'custom' | 'custom2') => {
+    e.stopPropagation()
+    e.preventDefault()
+    isDraggingRef.current = true
+    const el = containerRef.current
+    if (!el) return
+    const style = getComputedStyle(el)
+    const varName = layer === 'auto' ? '--auto' : layer === 'custom' ? '--custom' : '--custom2'
+    const curX = parseFloat(style.getPropertyValue(`${varName}-x`)) || (layer === 'auto' ? 50 : 50)
+    const curY = parseFloat(style.getPropertyValue(`${varName}-y`)) || (layer === 'auto' ? 85 : 50)
+    subDragStartRef.current = { mx: e.clientX, my: e.clientY, initX: curX, initY: curY }
+  }
+
   // ── Video drag start (social-post) ──
   const handleVideoDragStart = (e: React.MouseEvent) => {
     if (videoFormat !== 'social-post') return
@@ -429,6 +539,19 @@ export default function PreviewPanel({
             if (p) onOverlayMove(p.x, p.y)
           })
         }
+        return
+      }
+
+      // Watermark drag
+      if (wmDragRef.current) {
+        const start = wmDragStartRef.current
+        if (!start || !containerRef.current) return
+        const rect = containerRef.current.getBoundingClientRect()
+        const dxPct = ((e.clientX - start.mx) / rect.width) * 100
+        const dyPct = ((e.clientY - start.my) / rect.height) * 100
+        const newX = Math.max(0, Math.min(100, start.initX + dxPct))
+        const newY = Math.max(0, Math.min(100, start.initY + dyPct))
+        onWatermarkPositionDrag(Math.round(newX * 10) / 10, Math.round(newY * 10) / 10)
         return
       }
 
@@ -541,10 +664,27 @@ export default function PreviewPanel({
       }
       // Subtitle drag
       if (!isDraggingRef.current) return
-      const raw = getPosFromEvent(e)
-      if (!raw) return
-      const { x, y, hx, hy } = applySnap(raw.x, raw.y)
-      const pos = { x, y }
+      let pos: Pos
+      let hx: number | null = null, hy: number | null = null
+      const start = subDragStartRef.current
+      if (start && containerRef.current) {
+        // Delta-based drag (started from text element)
+        const rect = containerRef.current.getBoundingClientRect()
+        const dxPct = ((e.clientX - start.mx) / rect.width) * 100
+        const dyPct = ((e.clientY - start.my) / rect.height) * 100
+        const rawX = Math.max(0, Math.min(100, start.initX + dxPct))
+        const rawY = Math.max(0, Math.min(100, start.initY + dyPct))
+        const snapped = applySnap(rawX, rawY)
+        pos = { x: snapped.x, y: snapped.y }
+        hx = snapped.hx; hy = snapped.hy
+      } else {
+        // Teleport (clicked empty area)
+        const raw = getPosFromEvent(e)
+        if (!raw) return
+        const snapped = applySnap(raw.x, raw.y)
+        pos = { x: snapped.x, y: snapped.y }
+        hx = snapped.hx; hy = snapped.hy
+      }
       updateSnapLines(hx, hy)
       setCSSSubPos(pos, activeLayer)
       lastPosRef.current = { pos, layer: activeLayer }
@@ -569,6 +709,11 @@ export default function PreviewPanel({
         if (p) { onOverlayMove(p.x, p.y); lastOverlayPosRef.current = null }
         overlayDragStartRef.current = null
         clearSnapLines()
+        return
+      }
+      if (wmDragRef.current) {
+        wmDragRef.current = false
+        wmDragStartRef.current = null
         return
       }
       if (emojiDragIdRef.current !== null) {
@@ -604,6 +749,7 @@ export default function PreviewPanel({
       }
       if (!isDraggingRef.current) return
       isDraggingRef.current = false
+      subDragStartRef.current = null
       if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null }
       const p = lastPosRef.current
       if (p) {
@@ -670,7 +816,7 @@ export default function PreviewPanel({
             <button
               type="button"
               onClick={onCropCancel}
-              className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex-shrink-0"
+              className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors px-4 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 flex-shrink-0"
             >
               Cancel
             </button>
@@ -684,14 +830,14 @@ export default function PreviewPanel({
             <button
               type="button"
               onClick={() => onCropChange({ x: 0, y: 0, w: 100, h: 100 })}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex-shrink-0"
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors px-2.5 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 flex-shrink-0"
             >
               Reset
             </button>
             <button
               type="button"
               onClick={onCropDone}
-              className="text-sm bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-lg px-5 py-2 transition-colors flex-shrink-0"
+              className="text-sm bg-violet-600 hover:bg-violet-500 btn-press text-white font-semibold rounded-lg px-5 py-2 transition-colors flex-shrink-0"
             >
               Done
             </button>
@@ -701,7 +847,7 @@ export default function PreviewPanel({
           <div className="flex-1 flex items-center justify-center w-full min-h-0">
             <div
               ref={cropContainerRef}
-              className="relative overflow-hidden rounded-xl border border-zinc-700 select-none"
+              className="relative overflow-hidden rounded-xl border border-border select-none"
               style={{
                 aspectRatio: sourceVideoAR ? String(sourceVideoAR) : '9/16',
                 // Drive from height for portrait (AR≤1), from width for landscape (AR>1)
@@ -714,7 +860,7 @@ export default function PreviewPanel({
               onMouseDown={handleCropMouseDown}
             >
               {/* Background: always zinc-900 so no black flash */}
-              <div className="absolute inset-0 bg-zinc-900" />
+              <div className="absolute inset-0 bg-surface-1" />
 
               {/* Spinner while image loads */}
               {thumbnailSrc && !thumbLoaded && !thumbError && (
@@ -842,7 +988,7 @@ export default function PreviewPanel({
           <div
             ref={containerRef}
             onMouseDown={handleMouseDown}
-            className="relative overflow-hidden rounded-xl border border-zinc-800 shadow-2xl bg-zinc-900 select-none"
+            className="relative overflow-hidden rounded-xl border border-border shadow-2xl bg-surface-1 select-none"
             style={{
               aspectRatio: `${presetWidth}/${presetHeight}`,
               height: '100%',
@@ -858,6 +1004,7 @@ export default function PreviewPanel({
                 {videoFormat === 'standard' && (
                   <video ref={videoRef} src={videoUrl}
                     className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                    style={videoFilterStyle}
                     preload="metadata" playsInline />
                 )}
 
@@ -868,26 +1015,25 @@ export default function PreviewPanel({
                     style={{
                       position: 'absolute',
                       width: 'var(--vid-scale)',
-                      height: 'auto',
                       top:  'calc(50% + var(--vid-y, 0%))',
                       left: 'calc(50% + var(--vid-x, 0%))',
                       transform: 'translate(-50%, -50%)',
                       pointerEvents: 'auto',
                       cursor: 'move',
+                      lineHeight: 0,
                     }}
-                    title="Drag to reposition"
                   >
                     <video ref={videoRef} src={videoUrl}
-                      style={{ width: '100%', height: 'auto', display: 'block' }}
+                      style={{ width: '100%', height: 'auto', display: 'block', ...videoFilterStyle }}
                       preload="metadata" playsInline />
                     <div className="absolute inset-0 ring-2 ring-white/30 rounded pointer-events-none" />
-                    <div className={`${cornerBase} -top-1.5 -left-1.5 cursor-nwse-resize`}
+                    <div className={`${cornerBase} top-0 left-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize`}
                       onMouseDown={e => handleResizeStart(e, 'top')} />
-                    <div className={`${cornerBase} -top-1.5 -right-1.5 cursor-nesw-resize`}
+                    <div className={`${cornerBase} top-0 right-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize`}
                       onMouseDown={e => handleResizeStart(e, 'top')} />
-                    <div className={`${cornerBase} -bottom-1.5 -left-1.5 cursor-nesw-resize`}
+                    <div className={`${cornerBase} bottom-0 left-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize`}
                       onMouseDown={e => handleResizeStart(e, 'bottom')} />
-                    <div className={`${cornerBase} -bottom-1.5 -right-1.5 cursor-nwse-resize`}
+                    <div className={`${cornerBase} bottom-0 right-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize`}
                       onMouseDown={e => handleResizeStart(e, 'bottom')} />
                   </div>
                 )}
@@ -896,7 +1042,7 @@ export default function PreviewPanel({
                 {videoFormat === 'cinematic' && (
                   <>
                     <video ref={videoRef} src={videoUrl}
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', ...videoFilterStyle }}
                       preload="metadata" playsInline />
                     <div style={{
                       position: 'absolute', top: 0, left: 0, right: 0,
@@ -922,6 +1068,7 @@ export default function PreviewPanel({
                         width: '100%', height: '100%',
                         objectFit: 'cover',
                         pointerEvents: 'none',
+                        ...videoFilterStyle,
                       }}
                       preload="metadata" playsInline />
                     <div style={{
@@ -942,16 +1089,18 @@ export default function PreviewPanel({
                 )}
               </>
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                style={{
-                  backgroundImage: 'linear-gradient(rgba(63,63,70,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(63,63,70,0.15) 1px, transparent 1px)',
-                  backgroundSize: '33.33% 33.33%',
-                }}>
-                <div className="text-center space-y-2">
-                  <svg className="h-10 w-10 text-zinc-700 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  <p className="text-xs text-zinc-700">Import a video to preview</p>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                {/* Ambient violet glow behind icon */}
+                <div className="absolute w-48 h-48 rounded-full opacity-[0.06]" style={{ background: 'radial-gradient(circle, #7c3aed 0%, transparent 70%)' }} />
+                <div className="relative text-center space-y-3">
+                  {/* Dashed drop-zone border */}
+                  <div className="mx-auto w-20 h-20 rounded-2xl border-2 border-dashed border-violet-600/20 flex items-center justify-center">
+                    <svg className="h-8 w-8 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-zinc-500 font-medium">Paste a URL to get started</p>
+                  <p className="text-[11px] text-zinc-700 font-mono tracking-wide">Cmd+V to paste</p>
                 </div>
               </div>
             )}
@@ -975,26 +1124,120 @@ export default function PreviewPanel({
               />
             )}
 
+            {/* Vignette effect overlay (for vignette and lomo presets) */}
+            {(clipColorPreset === 'vignette' || clipColorPreset === 'lomo') && !showOriginal && (
+              <div className="absolute inset-0 pointer-events-none" style={{
+                boxShadow: 'inset 0 0 80px 30px rgba(0,0,0,0.6)',
+                zIndex: 14,
+              }} />
+            )}
+
+            {/* Watermark 1 — image mode */}
+            {watermarkEnabled && !showOriginal && watermarkMode === 'image' && watermarkPreviewUrl && (
+              <img
+                src={watermarkPreviewUrl}
+                alt="watermark"
+                draggable={false}
+                className="absolute object-contain"
+                style={{
+                  width: `${watermarkScale}%`,
+                  opacity: watermarkOpacity,
+                  zIndex: 16,
+                  cursor: watermarkPosition === 'custom' ? 'move' : 'default',
+                  pointerEvents: watermarkPosition === 'custom' ? 'auto' : 'none',
+                  ...(watermarkStroke > 0 ? { filter: `drop-shadow(0 0 ${watermarkStroke}px #${watermarkStrokeColor})` } : {}),
+                  ...(watermarkPosition === 'custom' ? { left: `${watermarkCustomX}%`, top: `${watermarkCustomY}%`, transform: 'translate(-50%, -50%)' } : {}),
+                  ...(watermarkPosition === 'top-left' && { top: '3%', left: '3%' }),
+                  ...(watermarkPosition === 'top-right' && { top: '3%', right: '3%' }),
+                  ...(watermarkPosition === 'bottom-left' && { bottom: '3%', left: '3%' }),
+                  ...(watermarkPosition === 'bottom-right' && { bottom: '3%', right: '3%' }),
+                  ...(watermarkPosition === 'center' && { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }),
+                }}
+                onMouseDown={watermarkPosition === 'custom' ? (e) => {
+                  e.stopPropagation(); e.preventDefault()
+                  wmDragRef.current = true
+                  wmDragStartRef.current = { mx: e.clientX, my: e.clientY, initX: watermarkCustomX, initY: watermarkCustomY }
+                } : undefined}
+              />
+            )}
+            {/* Watermark 1 — text mode */}
+            {watermarkEnabled && !showOriginal && watermarkMode === 'text' && watermarkText && (
+              <span
+                className="absolute whitespace-nowrap"
+                style={{
+                  fontFamily: "'Instagram Sans Headline', 'Trebuchet MS', 'DejaVu Sans', sans-serif",
+                  fontWeight: watermarkTextWeight,
+                  fontSize: `${Math.max(2, watermarkScale * 0.6)}cqi`,
+                  color: `#${watermarkTextColor}`,
+                  opacity: watermarkOpacity,
+                  letterSpacing: '0.02em',
+                  zIndex: 16,
+                  cursor: watermarkPosition === 'custom' ? 'move' : 'default',
+                  pointerEvents: watermarkPosition === 'custom' ? 'auto' : 'none',
+                  ...(watermarkStroke > 0 ? {
+                    textShadow: `0 0 ${watermarkStroke}px #${watermarkStrokeColor}, 0 0 ${watermarkStroke}px #${watermarkStrokeColor}`,
+                  } : {}),
+                  ...(watermarkPosition === 'custom' ? { left: `${watermarkCustomX}%`, top: `${watermarkCustomY}%`, transform: 'translate(-50%, -50%)' } : {}),
+                  ...(watermarkPosition === 'top-left' && { top: '3%', left: '3%' }),
+                  ...(watermarkPosition === 'top-right' && { top: '3%', right: '3%' }),
+                  ...(watermarkPosition === 'bottom-left' && { bottom: '3%', left: '3%' }),
+                  ...(watermarkPosition === 'bottom-right' && { bottom: '3%', right: '3%' }),
+                  ...(watermarkPosition === 'center' && { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }),
+                }}
+                onMouseDown={watermarkPosition === 'custom' ? (e) => {
+                  e.stopPropagation(); e.preventDefault()
+                  wmDragRef.current = true
+                  wmDragStartRef.current = { mx: e.clientX, my: e.clientY, initX: watermarkCustomX, initY: watermarkCustomY }
+                } : undefined}
+              >
+                {watermarkText}
+              </span>
+            )}
+
+            {/* Watermark 2 — static position */}
+            {watermark2Enabled && watermark2PreviewUrl && !showOriginal && (
+              <img
+                src={watermark2PreviewUrl}
+                alt="watermark 2"
+                draggable={false}
+                className="absolute object-contain pointer-events-none"
+                style={{
+                  width: `${watermark2Scale}%`,
+                  opacity: watermark2Opacity,
+                  zIndex: 16,
+                  ...(watermark2Stroke > 0 ? { filter: `drop-shadow(0 0 ${watermark2Stroke}px #${watermark2StrokeColor})` } : {}),
+                  ...(watermark2Position === 'top-left' && { top: '3%', left: '3%' }),
+                  ...(watermark2Position === 'top-right' && { top: '3%', right: '3%' }),
+                  ...(watermark2Position === 'bottom-left' && { bottom: '3%', left: '3%' }),
+                  ...(watermark2Position === 'bottom-right' && { bottom: '3%', right: '3%' }),
+                  ...(watermark2Position === 'center' && { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }),
+                }}
+              />
+            )}
+
             {/* Auto subtitle layer */}
             {autoEnabled && !showOriginal && (
-              <div className="absolute pointer-events-none"
-                style={{ left: 'var(--auto-x, 50%)', top: 'var(--auto-y, 85%)', transform: autoStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
+              <div className="absolute"
+                style={{ left: 'var(--auto-x, 50%)', top: 'var(--auto-y, 85%)', transform: autoStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 30, cursor: 'move', pointerEvents: 'auto' }}
+                onMouseDown={e => handleSubtitleDragStart(e, 'auto')}>
                 <span style={subtitleStyle(autoStyle, activeLayer === 'custom')}>{autoText}</span>
               </div>
             )}
 
             {/* Custom text layer */}
             {customEnabled && !showOriginal && (
-              <div className="absolute pointer-events-none"
-                style={{ left: 'var(--custom-x, 50%)', top: 'var(--custom-y, 50%)', transform: customStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
+              <div className="absolute"
+                style={{ left: 'var(--custom-x, 50%)', top: 'var(--custom-y, 50%)', transform: customStyle.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 30, cursor: 'move', pointerEvents: 'auto' }}
+                onMouseDown={e => handleSubtitleDragStart(e, 'custom')}>
                 <span style={subtitleStyle(customStyle, activeLayer === 'auto')}>{customText}</span>
               </div>
             )}
 
             {/* Custom text 2 layer */}
             {custom2Enabled && !showOriginal && (
-              <div className="absolute pointer-events-none"
-                style={{ left: 'var(--custom2-x, 50%)', top: 'var(--custom2-y, 50%)', transform: custom2Style.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%' }}>
+              <div className="absolute"
+                style={{ left: 'var(--custom2-x, 50%)', top: 'var(--custom2-y, 50%)', transform: custom2Style.textAlign === 'left' ? 'translate(0%,-50%)' : 'translate(-50%,-50%)', maxWidth: '92%', zIndex: 30, cursor: 'move', pointerEvents: 'auto' }}
+                onMouseDown={e => handleSubtitleDragStart(e, 'custom2')}>
                 <span style={subtitleStyle(custom2Style, activeLayer !== 'custom2')}>{custom2Text}</span>
               </div>
             )}
@@ -1056,7 +1299,7 @@ export default function PreviewPanel({
       {!cropEditClipId && videoUrl && (
         <div className="flex-shrink-0 w-full flex flex-col gap-1.5 px-2" style={{ maxWidth: 'calc(min(100%, (100vh - 140px) * 9 / 16))' }}>
           <div
-            className="w-full h-1.5 bg-zinc-700 rounded-full cursor-pointer overflow-hidden"
+            className="w-full h-1.5 bg-surface-3 rounded-full cursor-pointer overflow-hidden"
             onClick={handleScrubClick}
           >
             <div className="h-full bg-violet-500 rounded-full transition-none" style={{ width: `${progress}%` }} />
@@ -1066,7 +1309,7 @@ export default function PreviewPanel({
             <button
               type="button"
               onClick={togglePlay}
-              className="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors flex-shrink-0"
+              className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface-2 hover:bg-surface-3 text-zinc-300 transition-colors flex-shrink-0"
             >
               {isPlaying ? (
                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -1084,17 +1327,18 @@ export default function PreviewPanel({
             </span>
 
             {/* Thumbnail capture */}
+            <Tooltip text="Capture current frame as JPG thumbnail">
             <button
               type="button"
               onClick={captureFrame}
-              title="Capture thumbnail (JPG)"
-              className="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors flex-shrink-0"
+              className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface-2 hover:bg-surface-3 text-zinc-400 hover:text-zinc-200 transition-colors flex-shrink-0"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </button>
+            </Tooltip>
 
             {zoomSelectClipId && (
               <span className="text-[10px] text-violet-400 bg-violet-900/30 rounded px-1.5 py-0.5">Click frame to set zoom target</span>
@@ -1103,30 +1347,32 @@ export default function PreviewPanel({
             <div className="ml-auto flex items-center gap-1">
               {/* Before/After toggle */}
               {onToggleShowOriginal && (
+                <Tooltip text={showOriginal ? 'Show edited preview' : 'Show original video'}>
                 <button
                   type="button"
                   onClick={onToggleShowOriginal}
-                  title={showOriginal ? 'Show edited' : 'Show original'}
-                  className={`text-[10px] px-2 py-0.5 rounded border transition-all ${showOriginal ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
+                  className={`text-[10px] px-2 py-0.5 rounded border transition-all ${showOriginal ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-500 hover:text-zinc-300'}`}
                 >
                   {showOriginal ? 'Original' : 'Edited'}
                 </button>
+                </Tooltip>
               )}
               {/* Grid overlay toggle */}
               {onToggleShowGrid && (
+                <Tooltip text="Rule of thirds grid">
                 <button
                   type="button"
                   onClick={onToggleShowGrid}
-                  title="Toggle rule-of-thirds grid"
-                  className={`w-6 h-6 flex items-center justify-center rounded border transition-all ${showGrid ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
+                  className={`w-6 h-6 flex items-center justify-center rounded border transition-all ${showGrid ? 'border-violet-500 bg-violet-600/20 text-violet-300' : 'border-border bg-surface-2 text-zinc-500 hover:text-zinc-300'}`}
                 >
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h16M4 16h16M8 4v16M16 4v16" />
                   </svg>
                 </button>
+                </Tooltip>
               )}
               {videoFormat !== 'standard' && !zoomSelectClipId && (
-                <span className="text-[9px] font-medium bg-zinc-800 text-zinc-500 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                <span className="text-[9px] font-medium bg-surface-2 text-zinc-500 rounded px-1.5 py-0.5 uppercase tracking-wide">
                   {videoFormat.replace('-', ' ')}
                 </span>
               )}

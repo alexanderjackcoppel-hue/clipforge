@@ -1,14 +1,17 @@
 'use client'
 
+import { Download, Scissors, Frame, Subtitles, Volume2, Layers, Upload, FolderOpen } from 'lucide-react'
+import Tooltip from './Tooltip'
+
 export type EditorStep = 'import' | 'trim' | 'platform' | 'subtitles' | 'voiceover' | 'overlay' | 'export'
 
-const STEPS: { id: EditorStep; label: string; num: number }[] = [
-  { id: 'import',    label: 'Import',    num: 1 },
-  { id: 'trim',      label: 'Trim',      num: 2 },
-  { id: 'platform',  label: 'Platform',  num: 3 },
-  { id: 'subtitles', label: 'Subtitles', num: 4 },
-  { id: 'voiceover', label: 'Audio',     num: 5 },
-  { id: 'overlay',   label: 'Overlay',   num: 6 },
+const STEPS: { id: EditorStep; label: string; icon: typeof Download }[] = [
+  { id: 'import',    label: 'Import',   icon: Download },
+  { id: 'trim',      label: 'Trim',     icon: Scissors },
+  { id: 'platform',  label: 'Format',   icon: Frame },
+  { id: 'subtitles', label: 'Captions', icon: Subtitles },
+  { id: 'voiceover', label: 'Audio',    icon: Volume2 },
+  { id: 'overlay',   label: 'Overlay',  icon: Layers },
 ]
 
 interface SidebarProps {
@@ -17,6 +20,7 @@ interface SidebarProps {
   completedSteps: Set<EditorStep>
   lockedSteps: Set<EditorStep>
   errorSteps: Set<EditorStep>
+  onDraftsClick?: () => void
 }
 
 export default function Sidebar({
@@ -25,80 +29,117 @@ export default function Sidebar({
   completedSteps,
   lockedSteps,
   errorSteps,
+  onDraftsClick,
 }: SidebarProps) {
   return (
     <nav
       role="navigation"
       aria-label="Editor steps"
-      className="w-48 flex-shrink-0 bg-zinc-950 border-r border-zinc-800 flex flex-col py-3"
+      className="w-[72px] flex-shrink-0 glass-panel border-r flex flex-col items-center py-3 relative z-20 overflow-visible gap-1"
     >
-      <div className="flex-1">
+      <div className="flex-1 flex flex-col items-center gap-1 w-full">
         {STEPS.map(step => {
           const isActive    = activeStep === step.id
           const isComplete  = completedSteps.has(step.id)
           const isLocked    = lockedSteps.has(step.id)
           const hasError    = errorSteps.has(step.id)
+          const Icon = step.icon
 
-          return (
+          const btn = (
             <button
-              key={step.id}
+              key={isLocked ? undefined : step.id}
               type="button"
               disabled={isLocked}
               aria-current={isActive ? 'step' : undefined}
               onClick={() => !isLocked && onStepChange(step.id)}
-              className={`relative w-full flex items-center gap-2.5 px-3.5 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 focus-visible:ring-inset ${
+              className={`relative w-[56px] flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 ${
                 isLocked
-                  ? 'opacity-35 cursor-not-allowed text-zinc-500'
+                  ? 'opacity-30 cursor-not-allowed'
                   : isActive
-                    ? 'text-zinc-100 bg-zinc-800'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                    ? 'bg-surface-3 border border-violet-500/20'
+                    : 'hover:bg-surface-3/50 border border-transparent'
               }`}
             >
-              {/* Active indicator bar */}
-              {isActive && (
-                <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-violet-600 rounded-r" />
-              )}
-
-              {/* Step number / status */}
-              <span className={`relative flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                isActive
-                  ? 'bg-violet-600 text-white'
-                  : isComplete && !hasError
-                    ? 'bg-transparent text-emerald-400'
-                    : hasError
-                      ? 'bg-transparent text-red-400'
-                      : 'bg-zinc-800 text-zinc-500'
-              }`}>
-                {isComplete && !hasError ? (
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : hasError ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                ) : (
-                  step.num
+              {/* Icon */}
+              <span className="relative">
+                <Icon
+                  size={20}
+                  strokeWidth={1.8}
+                  className={`transition-colors duration-150 ${
+                    isActive
+                      ? 'text-violet-400'
+                      : isLocked
+                        ? 'text-zinc-600'
+                        : 'text-zinc-500'
+                  }`}
+                />
+                {/* Completed dot */}
+                {isComplete && !hasError && (
+                  <span className="absolute -top-0.5 -right-1 w-[6px] h-[6px] rounded-full bg-emerald-400" />
+                )}
+                {/* Error dot */}
+                {hasError && (
+                  <span className="absolute -top-0.5 -right-1 w-[6px] h-[6px] rounded-full bg-red-400" />
                 )}
               </span>
 
-              <span className="truncate">{step.label}</span>
+              {/* Label */}
+              <span className={`text-[10px] font-medium leading-none transition-colors duration-150 ${
+                isActive ? 'text-zinc-200' : isLocked ? 'text-zinc-600' : 'text-zinc-500'
+              }`}>
+                {step.label}
+              </span>
             </button>
           )
+
+          return isLocked ? (
+            <Tooltip key={step.id} text="Import a video first">{btn}</Tooltip>
+          ) : btn
         })}
       </div>
 
-      {/* Divider + export link */}
-      <div className="px-3.5 pt-2 mt-1 border-t border-zinc-800">
-        <button
-          type="button"
-          aria-current={activeStep === 'export' ? 'step' : undefined}
-          onClick={() => onStepChange('export')}
-          className={`w-full text-left text-xs font-medium transition-colors duration-150 py-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 focus-visible:ring-inset ${
-            activeStep === 'export' ? 'text-violet-400' : 'text-zinc-500 hover:text-zinc-300'
+      {/* Separator + Export */}
+      <div className="w-10 border-t border-border/40 my-1" />
+      <button
+        type="button"
+        aria-current={activeStep === 'export' ? 'step' : undefined}
+        onClick={() => onStepChange('export')}
+        className={`w-[56px] flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500 ${
+          activeStep === 'export'
+            ? 'bg-surface-3 border border-violet-500/20'
+            : 'hover:bg-surface-3/50 border border-transparent'
+        }`}
+      >
+        <Upload
+          size={20}
+          strokeWidth={1.8}
+          className={`transition-colors duration-150 ${
+            activeStep === 'export' ? 'text-violet-400' : 'text-zinc-500'
           }`}
-        >
-          export ↗
-        </button>
-      </div>
+        />
+        <span className={`text-[10px] font-medium leading-none transition-colors duration-150 ${
+          activeStep === 'export' ? 'text-zinc-200' : 'text-zinc-500'
+        }`}>
+          Export
+        </span>
+      </button>
+
+      {/* Separator + Drafts */}
+      <div className="w-10 border-t border-border/40 my-1" />
+      <button
+        type="button"
+        onClick={() => onDraftsClick?.()}
+        className="w-[56px] flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all duration-150 hover:bg-surface-3/50 border border-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
+      >
+        <FolderOpen
+          size={20}
+          strokeWidth={1.8}
+          className="transition-colors duration-150 text-zinc-500"
+        />
+        <span className="text-[10px] font-medium leading-none transition-colors duration-150 text-zinc-500">
+          Drafts
+        </span>
+      </button>
     </nav>
   )
 }

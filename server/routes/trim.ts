@@ -97,7 +97,7 @@ router.post('/', async (req, res) => {
         type: 'done',
         stage: 'trimmed',
         percent: 100,
-        url: `/files/${importJobId}/trimmed${sfx}.mp4`,
+        url: `/files/${importJobId}/trimmed${sfx}.mp4?t=${Date.now()}`,
       })
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Trim failed'

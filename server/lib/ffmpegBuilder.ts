@@ -17,6 +17,25 @@ export interface ExportOptions {
   overlayY: number        // 0-100 (center Y as % of frame height)
   overlayScale: number    // 1-100 (percent of frame width)
   overlayRotation: number // 0-359 degrees
+  // Watermark: persistent logo/trademark applied to every export
+  watermarkImage?: string // image file path
+  watermarkPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center' | 'custom'
+  watermarkScale?: number // 1-50 (percent of frame width, default 10)
+  watermarkOpacity?: number // 0-1 (default 0.8)
+  watermarkStroke?: number // 0-10 px outline thickness
+  watermarkStrokeColor?: string // 6-char hex for outline color
+  watermarkText?: string // text mode: render text instead of image
+  watermarkTextColor?: string // 6-char hex
+  watermarkTextWeight?: number // font weight 100-900
+  watermarkCustomX?: number // 0-100 for custom position
+  watermarkCustomY?: number // 0-100 for custom position
+  // Watermark 2: second persistent logo/trademark
+  watermark2Image?: string // image file path
+  watermark2Position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center'
+  watermark2Scale?: number // 1-50 (percent of frame width, default 10)
+  watermark2Opacity?: number // 0-1 (default 0.8)
+  watermark2Stroke?: number
+  watermark2StrokeColor?: string
   videoFormat?: 'standard' | 'social-post' | 'cinematic' | 'blur-bg'
   standardBgColor?: string // 6-char hex for standard (Regular) format pad color
   socialBgColor?: string  // 6-char hex like 'FFFFFF'
@@ -61,6 +80,16 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   if (opts.overlayImage) {
     overlayIdx = nextInputIdx++
     inputs.push('-i', opts.overlayImage)
+  }
+  let watermarkIdx: number | null = null
+  if (opts.watermarkImage) {
+    watermarkIdx = nextInputIdx++
+    inputs.push('-i', opts.watermarkImage)
+  }
+  let watermark2Idx: number | null = null
+  if (opts.watermark2Image) {
+    watermark2Idx = nextInputIdx++
+    inputs.push('-i', opts.watermark2Image)
   }
   let emojiOverlayIdx: number | null = null
   if (opts.emojiOverlayFile) {
@@ -130,12 +159,13 @@ export function buildExportArgs(opts: ExportOptions): string[] {
   const overlayExpr = `(W-w)/2+${offXpx}:(H-h)/2+${offYpx}`
 
   if (fmt === 'social-post') {
-    // Scale down, pad with solid background, then overlay at offset position
+    // Scale video to target width, then pad to output dimensions with bg color.
+    // pad creates the background inline — no separate color source needed,
+    // so no duration mismatch that could truncate or hang.
+    const targetW = Math.round(outW * scale / 2) * 2 // ensure even
     filterParts.push(
-      `${videoSrcLabel}scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},` +
-      `scale=round(iw*${scale}/2)*2:round(ih*${scale}/2)*2[vsmall];` +
-      `color=c=0x${bgHex}:size=${outW}x${outH}:r=30000/1001,format=yuv420p[bg];` +
-      `[bg][vsmall]overlay=${overlayExpr}[sv]`
+      `${videoSrcLabel}scale=${targetW}:-2,` +
+      `pad=${outW}:${outH}:(ow-iw)/2+${offXpx}:(oh-ih)/2+${offYpx}:color=0x${bgHex}[sv]`
     )
   } else if (fmt === 'cinematic') {
     // Fit video within frame (no crop), pad with bar color, then draw solid bars on top/bottom
@@ -209,6 +239,103 @@ export function buildExportArgs(opts: ExportOptions): string[] {
     }
     filterParts.push(`${lastVideoLabel}[ol]overlay=${posExpr}[ov]`)
     lastVideoLabel = '[ov]'
+  }
+
+  // Watermark — text mode (drawtext, no image input needed)
+  if (!opts.watermarkImage && opts.watermarkText) {
+    const wmText = escapeDrawtext(opts.watermarkText)
+    const wmOpacity = Math.max(0, Math.min(1, opts.watermarkOpacity ?? 0.8))
+    const wmScale = Math.max(3, Math.min(50, opts.watermarkScale ?? 10))
+    const fontSize = Math.round(outW * wmScale / 100 * 0.6)
+    const color = opts.watermarkTextColor ?? 'CCCCCC'
+    const pad = Math.round(outW * 0.03)
+    const wmStroke = Math.max(0, Math.min(10, opts.watermarkStroke ?? 0))
+    const strokeColor = opts.watermarkStrokeColor ?? 'FFFFFF'
+    const pos = opts.watermarkPosition ?? 'bottom-right'
+    let posExpr: string
+    switch (pos) {
+      case 'top-left':     posExpr = `x=${pad}:y=${pad}`; break
+      case 'top-right':    posExpr = `x=w-tw-${pad}:y=${pad}`; break
+      case 'bottom-left':  posExpr = `x=${pad}:y=h-th-${pad}`; break
+      case 'bottom-right': posExpr = `x=w-tw-${pad}:y=h-th-${pad}`; break
+      case 'center':       posExpr = `x=(w-tw)/2:y=(h-th)/2`; break
+      case 'custom': {
+        const cx = opts.watermarkCustomX ?? 50
+        const cy = opts.watermarkCustomY ?? 50
+        posExpr = `x=w*${(cx / 100).toFixed(4)}-tw/2:y=h*${(cy / 100).toFixed(4)}-th/2`
+        break
+      }
+    }
+    filterParts.push(
+      `${lastVideoLabel}drawtext=text='${wmText}':font='Instagram Sans Headline':fontsize=${fontSize}:fontcolor=#${color}@${wmOpacity.toFixed(2)}` +
+      `:${posExpr}` +
+      (wmStroke > 0 ? `:borderw=${wmStroke}:bordercolor=#${strokeColor}` : '') +
+      `[ov_wm]`
+    )
+    lastVideoLabel = '[ov_wm]'
+  }
+
+  // Watermark — image mode (persistent logo/trademark)
+  if (watermarkIdx !== null) {
+    const wmScale = Math.max(1, Math.min(50, opts.watermarkScale ?? 10))
+    const wmWidth = Math.round(outW * wmScale / 100)
+    const wmOpacity = Math.max(0, Math.min(1, opts.watermarkOpacity ?? 0.8))
+    const pad = 3 // percent padding from edges
+    const pos = opts.watermarkPosition ?? 'bottom-right'
+    let posExpr: string
+    switch (pos) {
+      case 'top-left':     posExpr = `x=W*${pad}/100:y=H*${pad}/100`; break
+      case 'top-right':    posExpr = `x=W*${100 - pad}/100-w:y=H*${pad}/100`; break
+      case 'bottom-left':  posExpr = `x=W*${pad}/100:y=H*${100 - pad}/100-h`; break
+      case 'bottom-right': posExpr = `x=W*${100 - pad}/100-w:y=H*${100 - pad}/100-h`; break
+      case 'center':       posExpr = `x=W/2-w/2:y=H/2-h/2`; break
+      case 'custom': {
+        const cx = opts.watermarkCustomX ?? 50
+        const cy = opts.watermarkCustomY ?? 50
+        posExpr = `x=W*${(cx / 100).toFixed(4)}-w/2:y=H*${(cy / 100).toFixed(4)}-h/2`
+        break
+      }
+    }
+    const opacityFilter = wmOpacity < 1 ? `,format=rgba,colorchannelmixer=aa=${wmOpacity.toFixed(2)}` : ''
+    const wmStroke = Math.max(0, Math.min(10, opts.watermarkStroke ?? 0))
+    if (wmStroke > 0) {
+      // Glow effect: blur a copy of the watermark and overlay original on top
+      filterParts.push(`[${watermarkIdx}:v]scale=${wmWidth}:-1,format=rgba,split[wm_orig][wm_glow]`)
+      filterParts.push(`[wm_glow]gblur=sigma=${wmStroke * 2}[wm_shadow]`)
+      filterParts.push(`[wm_shadow][wm_orig]overlay=0:0${opacityFilter}[wm]`)
+    } else {
+      filterParts.push(`[${watermarkIdx}:v]scale=${wmWidth}:-1${opacityFilter}[wm]`)
+    }
+    filterParts.push(`${lastVideoLabel}[wm]overlay=${posExpr}[ov_wm]`)
+    lastVideoLabel = '[ov_wm]'
+  }
+
+  // Watermark 2 (second persistent logo/trademark)
+  if (watermark2Idx !== null) {
+    const wm2Scale = Math.max(1, Math.min(50, opts.watermark2Scale ?? 10))
+    const wm2Width = Math.round(outW * wm2Scale / 100)
+    const wm2Opacity = Math.max(0, Math.min(1, opts.watermark2Opacity ?? 0.8))
+    const pad = 3 // percent padding from edges
+    const pos2 = opts.watermark2Position ?? 'bottom-right'
+    let posExpr2: string
+    switch (pos2) {
+      case 'top-left':     posExpr2 = `x=W*${pad}/100:y=H*${pad}/100`; break
+      case 'top-right':    posExpr2 = `x=W*${100 - pad}/100-w:y=H*${pad}/100`; break
+      case 'bottom-left':  posExpr2 = `x=W*${pad}/100:y=H*${100 - pad}/100-h`; break
+      case 'bottom-right': posExpr2 = `x=W*${100 - pad}/100-w:y=H*${100 - pad}/100-h`; break
+      case 'center':       posExpr2 = `x=W/2-w/2:y=H/2-h/2`; break
+    }
+    const opacityFilter2 = wm2Opacity < 1 ? `,format=rgba,colorchannelmixer=aa=${wm2Opacity.toFixed(2)}` : ''
+    const wm2Stroke = Math.max(0, Math.min(10, opts.watermark2Stroke ?? 0))
+    if (wm2Stroke > 0) {
+      filterParts.push(`[${watermark2Idx}:v]scale=${wm2Width}:-1,format=rgba,split[wm2_orig][wm2_glow]`)
+      filterParts.push(`[wm2_glow]gblur=sigma=${wm2Stroke * 2}[wm2_shadow]`)
+      filterParts.push(`[wm2_shadow][wm2_orig]overlay=0:0${opacityFilter2}[wm2]`)
+    } else {
+      filterParts.push(`[${watermark2Idx}:v]scale=${wm2Width}:-1${opacityFilter2}[wm2]`)
+    }
+    filterParts.push(`${lastVideoLabel}[wm2]overlay=${posExpr2}[ov_wm2]`)
+    lastVideoLabel = '[ov_wm2]'
   }
 
   // Emoji overlay (full-frame transparent PNG)
@@ -422,6 +549,7 @@ export function buildTrimArgs(opts: {
     '-crf', '23',
     '-c:a', 'aac',
     '-b:a', '192k',
+    '-avoid_negative_ts', 'make_zero',  // fix VFR/seek timestamp issues
     '-movflags', '+faststart',
     '-y',
     opts.outputVideo,
@@ -435,7 +563,7 @@ export function parseTime(mmss: string): number {
   if (isNaN(m) || isNaN(s) || s < 0 || s >= 60 || m < 0) {
     throw new Error(`Invalid time: "${mmss}". Use mm:ss (e.g. 1:30)`)
   }
-  return m * 60 + s
+  return m * 60 + s // s can now be decimal (e.g. "0:14.8" → 14.8)
 }
 
 export interface SubtitleLine {
@@ -470,6 +598,11 @@ export function buildASSSubtitles(
   const boldFlag = style.bold ? 1 : 0
   const outline = Math.max(0, Math.min(8, style.outlineWidth))
 
+  // ASS uses &HAABBGGRR color format (BGR order, not RGB).
+  // The input style.color is RGB hex (e.g. 'FF0000' = red), so swap R and B.
+  const rgbHex = style.color.padStart(6, '0')
+  const assPrimaryColor = `&H00${rgbHex.slice(4, 6)}${rgbHex.slice(2, 4)}${rgbHex.slice(0, 2)}`
+
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${outputWidth}
@@ -477,7 +610,7 @@ PlayResY: ${outputHeight}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${style.fontFamily},${style.fontSize},&H00${style.color},&H000000FF,&H00000000,&H80000000,${boldFlag},0,0,0,100,100,0,0,1,${outline},1,5,40,40,0,1
+Style: Default,${style.fontFamily},${style.fontSize},${assPrimaryColor},&H000000FF,&H00000000,&H80000000,${boldFlag},0,0,0,100,100,0,0,1,${outline},1,5,40,40,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
@@ -530,6 +663,7 @@ function buildAtempoChain(speed: number): string {
  */
 function buildColorEqFilter(preset: string | undefined): string {
   switch (preset) {
+    // Basic
     case 'warm':      return 'eq=contrast=1.05:brightness=0.02:saturation=1.2:gamma_r=1.1:gamma_b=0.9'
     case 'cool':      return 'eq=contrast=1.05:brightness=0.0:saturation=1.1:gamma_r=0.9:gamma_b=1.1'
     case 'vivid':     return 'eq=contrast=1.15:brightness=0.03:saturation=1.6'
@@ -537,6 +671,27 @@ function buildColorEqFilter(preset: string | undefined): string {
     case 'bw':        return 'hue=s=0,eq=contrast=1.1:brightness=0.0'
     case 'faded':     return 'eq=contrast=0.85:brightness=0.08:saturation=0.7'
     case 'night':     return 'eq=contrast=1.2:brightness=-0.08:saturation=0.9:gamma_b=1.2'
+    // Stylized FX
+    case 'vintage':   return 'eq=contrast=0.9:brightness=0.05:saturation=0.6:gamma_r=1.15:gamma_b=0.85,colorlevels=rimax=0.95:gimax=0.90:bimax=0.80:rimin=0.05:bimin=0.10'
+    case 'retro':     return 'eq=contrast=1.0:brightness=0.04:saturation=0.8:gamma_r=1.2:gamma_g=1.05:gamma_b=0.8'
+    case 'cyberpunk': return 'eq=contrast=1.3:brightness=-0.03:saturation=1.4:gamma_r=0.85:gamma_b=1.3'
+    case 'dreamy':    return 'eq=contrast=0.8:brightness=0.1:saturation=0.9:gamma=1.15'
+    case 'film':      return 'eq=contrast=1.05:brightness=-0.01:saturation=0.9:gamma_r=1.05:gamma_g=1.0:gamma_b=0.95'
+    case 'vignette':  return 'eq=contrast=1.05:brightness=0.0:saturation=1.0,vignette=PI/4'
+    case 'hicon':     return 'eq=contrast=1.4:brightness=-0.03:saturation=1.1'
+    case 'bleach':    return 'eq=contrast=1.3:brightness=0.0:saturation=0.4:gamma=0.9'
+    case 'tealorg':   return 'eq=contrast=1.1:brightness=0.0:saturation=1.2:gamma_r=1.15:gamma_g=0.95:gamma_b=1.2'
+    case 'sunset':    return 'eq=contrast=1.05:brightness=0.03:saturation=1.3:gamma_r=1.2:gamma_g=1.0:gamma_b=0.75'
+    case 'arctic':    return 'eq=contrast=1.1:brightness=0.05:saturation=0.7:gamma_r=0.85:gamma_b=1.25'
+    case 'neon':      return 'eq=contrast=1.25:brightness=0.0:saturation=2.0:gamma=1.05'
+    case 'sepia':     return 'colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131:0,eq=contrast=1.05'
+    case 'lomo':      return 'eq=contrast=1.3:brightness=-0.05:saturation=1.3:gamma_r=1.1:gamma_b=0.85,vignette=PI/3.5'
+    case 'chrome':    return 'eq=contrast=1.2:brightness=0.02:saturation=0.3:gamma=1.1'
+    case 'noir':      return 'hue=s=0,eq=contrast=1.35:brightness=-0.05:gamma=0.85'
+    case 'popart':    return 'eq=contrast=1.5:brightness=0.05:saturation=2.5'
+    case 'golden':    return 'eq=contrast=1.05:brightness=0.04:saturation=1.1:gamma_r=1.15:gamma_g=1.05:gamma_b=0.8'
+    case 'moody':     return 'eq=contrast=1.15:brightness=-0.06:saturation=0.75:gamma=0.85:gamma_b=1.1'
+    case 'pastel':    return 'eq=contrast=0.75:brightness=0.12:saturation=0.65:gamma=1.2'
     default:          return ''
   }
 }
